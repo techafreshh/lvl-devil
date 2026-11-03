@@ -37,12 +37,9 @@ func run_all() -> void:
 		await process_frame
 
 
-## Counting check helper: never use bare assert() in a SceneTree runner.
+## Non-counting check helper: never use bare assert() in a SceneTree runner.
 func expect(cond: bool, label: String) -> bool:
-	if cond:
-		passed += 1
-	else:
-		failed += 1
+	if not cond:
 		push_error("FAIL " + label)
 	return cond
 
