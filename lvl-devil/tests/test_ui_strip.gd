@@ -6,6 +6,8 @@ extends SceneTree
 
 var passed := 0
 var failed := 0
+var _backup_exists := false
+var _backup_text := ""
 
 
 func _initialize() -> void:
@@ -17,6 +19,7 @@ func _initialize() -> void:
 func run_all() -> void:
 	# Nodes need a frame before they can enter the tree cleanly.
 	await process_frame
+	_backup_save()
 	var tests := [
 		"test_boot_strip",
 		"test_fall_death_same_frame",
@@ -32,6 +35,7 @@ func run_all() -> void:
 			push_error("FAIL " + t + ": did not finish (runtime error?)")
 		# Flush freed nodes so the next test starts from a clean tree.
 		await process_frame
+	_restore_save()
 
 
 ## Non-counting check helper: never use bare assert() in a SceneTree runner.
@@ -42,6 +46,10 @@ func expect(cond: bool, label: String) -> bool:
 
 
 func make_manager() -> GameManager:
+	# Absolute-label asserts need a deterministic start: drop any leftover
+	# save from earlier suites so _ready boots {0,0} (restored in run_all).
+	if FileAccess.file_exists(Save.SAVE_PATH):
+		DirAccess.remove_absolute(Save.SAVE_PATH)
 	var mgr := GameManager.new()
 	mgr.name = "Game"
 	root.add_child(mgr)
@@ -65,6 +73,26 @@ func strip_of(mgr: GameManager) -> UIStrip:
 	if mgr.strip != null and is_instance_valid(mgr.strip):
 		return mgr.strip
 	return mgr.get_node_or_null("UIStrip") as UIStrip
+
+
+func _backup_save() -> void:
+	_backup_exists = FileAccess.file_exists(Save.SAVE_PATH)
+	if _backup_exists:
+		var file := FileAccess.open(Save.SAVE_PATH, FileAccess.READ)
+		if file != null:
+			_backup_text = file.get_as_text()
+			file.close()
+
+
+func _restore_save() -> void:
+	if _backup_exists:
+		var file := FileAccess.open(Save.SAVE_PATH, FileAccess.WRITE)
+		if file != null:
+			file.store_string(_backup_text)
+			file.close()
+	else:
+		if FileAccess.file_exists(Save.SAVE_PATH):
+			DirAccess.remove_absolute(Save.SAVE_PATH)
 
 
 func label_text(strip: UIStrip, label_name: String) -> String:

@@ -69,6 +69,10 @@ jobs:
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_death_loop.gd
 
+      - name: Run persistence tests
+        timeout-minutes: 5
+        run: godot --headless --path lvl-devil --script res://tests/test_persistence.gd
+
       - name: Run UI-strip tests
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_ui_strip.gd
