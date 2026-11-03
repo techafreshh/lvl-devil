@@ -142,14 +142,14 @@ func test_no_dodge_at_spawn() -> bool:
 	var ok := true
 	var mgr := make_manager()
 	await process_frame
-	ok = expect(mgr.start_level(1), "no-trigger: start_level(1) builds") and ok
+	ok = expect(mgr.start_level(2), "no-trigger: start_level(2) builds") and ok
 	if not ok:
 		await cleanup_manager(mgr)
 		return ok
 	await process_frame
 	await physics_frame
 	var door := find_door(mgr)
-	ok = expect(door != null, "no-trigger: level 1 has a fleeing door") and ok
+	ok = expect(door != null, "no-trigger: level 2 has a fleeing door") and ok
 	if door == null:
 		await cleanup_manager(mgr)
 		return ok
@@ -171,20 +171,20 @@ func test_dodge_once() -> bool:
 	var ok := true
 	var mgr := make_manager()
 	await process_frame
-	ok = expect(mgr.start_level(1), "dodge: start_level(1) builds") and ok
+	ok = expect(mgr.start_level(2), "dodge: start_level(2) builds") and ok
 	if not ok:
 		await cleanup_manager(mgr)
 		return ok
 	await process_frame
 	await physics_frame
 	var door := find_door(mgr)
-	ok = expect(door != null, "dodge: level 1 has a fleeing door") and ok
+	ok = expect(door != null, "dodge: level 2 has a fleeing door") and ok
 	if door == null:
 		await cleanup_manager(mgr)
 		return ok
 	var spawn: Vector2 = mgr.spawn_pos
-	var target := t_center_of(1)
-	ok = expect(target.x >= 0.0, "dodge: level 1 has a T cell") and ok
+	var target := t_center_of(2)
+	ok = expect(target.x >= 0.0, "dodge: level 2 has a T cell") and ok
 	var marks: Array = []
 	(door as FleeingDoor).dodged.connect(func(_d: Node) -> void: marks.append(Time.get_ticks_msec()))
 	var dir := ((door as Node2D).global_position - spawn).normalized()
@@ -224,19 +224,19 @@ func test_catch_after_dodge() -> bool:
 	var ok := true
 	var mgr := make_manager()
 	await process_frame
-	ok = expect(mgr.start_level(1), "catch: start_level(1) builds") and ok
+	ok = expect(mgr.start_level(2), "catch: start_level(2) builds") and ok
 	if not ok:
 		await cleanup_manager(mgr)
 		return ok
 	await process_frame
 	await physics_frame
 	var door := find_door(mgr)
-	ok = expect(door != null, "catch: level 1 has a fleeing door") and ok
+	ok = expect(door != null, "catch: level 2 has a fleeing door") and ok
 	if door == null:
 		await cleanup_manager(mgr)
 		return ok
 	var spawn: Vector2 = mgr.spawn_pos
-	var target := t_center_of(1)
+	var target := t_center_of(2)
 	var dir := ((door as Node2D).global_position - spawn).normalized()
 	await step_toward(mgr, door, spawn + dir * 40.0, (door as Node2D).global_position, 30)
 	ok = expect((door as FleeingDoor).has_dodged(), "catch: door dodges first") and ok
@@ -253,8 +253,8 @@ func test_catch_after_dodge() -> bool:
 	ok = expect((door as Node2D).global_position.distance_to(target) < 4.0, "catch: door reaches T before the catch") and ok
 	# Rewind the counter so the last level has a next level to load;
 	# the exit wiring must still advance exactly like the static door.
-	mgr.current_level = 1
-	mgr.level_idx = 1
+	mgr.current_level = 2
+	mgr.level_idx = 2
 	var exited_marks: Array = []
 	(door as FleeingDoor).exited.connect(func(_d: Node) -> void: exited_marks.append(1))
 	(mgr.player as Node2D).global_position = (door as Node2D).global_position
@@ -266,7 +266,7 @@ func test_catch_after_dodge() -> bool:
 		await process_frame
 		if not is_instance_valid(mgr):
 			break
-		if mgr.current_level == 2 and mgr.level_idx == 2:
+		if mgr.current_level == 3 and mgr.level_idx == 3:
 			elapsed = Time.get_ticks_msec() - t0
 			advanced = true
 			break

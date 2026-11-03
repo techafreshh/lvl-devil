@@ -91,3 +91,7 @@ jobs:
       - name: Run trap-gauntlet tests
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_traps.gd
+
+      - name: Run levels-1-5 tests
+        timeout-minutes: 5
+        run: godot --headless --path lvl-devil --script res://tests/test_levels_1_5.gd
