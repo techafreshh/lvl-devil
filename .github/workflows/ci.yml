@@ -1,0 +1,54 @@
+name: CI
+
+on: push
+
+jobs:
+  validate:
+    name: Import and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+
+      - name: Godot version
+        run: godot --version
+
+      - name: Headless import
+        run: |
+          set -o pipefail
+          godot --headless --path lvl-devil --import 2>&1 | tee import.log
+
+      - name: Fail on script errors
+        run: |
+          if grep -Ei "SCRIPT ERROR|Parse Error|parse error" import.log; then
+            echo "::error::Script or parse errors found during headless import."
+            exit 1
+          fi
+
+      - name: Check for stale UID/scene changes
+        run: |
+          if [ -n "$(git status --porcelain -- '*.uid' '*.tscn')" ]; then
+            echo "::error::Headless import produced new or modified .uid/.tscn files."
+            git status --porcelain -- '*.uid' '*.tscn'
+            exit 1
+          fi
+
+      - name: Validate GDScript parsing
+        run: |
+          shopt -s globstar nullglob
+          status=0
+          for f in lvl-devil/**/*.gd; do
+            rel="${f#lvl-devil/}"
+            if ! godot --headless --path lvl-devil --check-only --script "res://$rel"; then
+              echo "::error::Parse check failed for $f"
+              status=1
+            fi
+          done
+          exit $status
