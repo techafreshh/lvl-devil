@@ -7,15 +7,18 @@ class_name GameManager extends Node
 
 
 const FREEZE_TIME := 0.1
+const EXIT_DELAY := 0.3
 const KILL_Y := 376.0
 const DEATH_SFX_PATH := "res://sfx/death.wav"
 
 var level_idx := 0
+var current_level := 0
 var level: Node2D = null
 var player: CharacterBody2D = null
 var spawn_pos := Vector2.ZERO
 
 var _dying := false
+var _exiting := false
 var _generation := 0
 
 
@@ -24,8 +27,10 @@ func _ready() -> void:
 
 
 ## Frees any old level, builds `idx` via LevelBuilder, records the spawn
-## and wires every spike `killed` signal. Loud false on a null build.
+## and wires every spike `killed` and door `exited` signal.
+## Loud false on a null build.
 func start_level(idx: int) -> bool:
+	current_level = idx
 	level_idx = idx
 	if is_instance_valid(level):
 		remove_child(level)
@@ -47,12 +52,39 @@ func start_level(idx: int) -> bool:
 	for spike: Node in spikes:
 		if spike.has_signal("killed"):
 			(spike as PopupSpike).killed.connect(_on_spike_killed)
+	var doors := get_tree().get_nodes_in_group("doors")
+	for door: Node in doors:
+		if door.has_signal("exited"):
+			(door as FleeingDoor).exited.connect(_on_door_exited)
 	_dying = false
+	_exiting = false
 	return true
 
 
 func _on_spike_killed(_spike: Node) -> void:
 	request_death("spike")
+
+
+## Advances to the next shipped level; loud false when none remains.
+func next_level() -> bool:
+	var nxt := current_level + 1
+	if nxt < 0 or nxt >= Levels.count():
+		push_error("[Game] level %d: no next level (have %d levels)" % [current_level, Levels.count()])
+		return false
+	return start_level(nxt)
+
+
+func _on_door_exited(_door: Node) -> void:
+	if _exiting:
+		return
+	if level == null or not is_instance_valid(level):
+		return
+	_exiting = true
+	var gen := _generation
+	await get_tree().create_timer(EXIT_DELAY).timeout
+	if gen != _generation:
+		return
+	next_level()
 
 
 ## Starts the death presentation unless one is already in flight.

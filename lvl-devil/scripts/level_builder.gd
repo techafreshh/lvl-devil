@@ -10,6 +10,7 @@ const GRID_W := 20
 const GRID_H := 11
 const PLAYER_SCENE_PATH := "res://scenes/player.tscn"
 const SPIKE_SCENE_PATH := "res://scenes/spike.tscn"
+const DOOR_SCENE_PATH := "res://scenes/door.tscn"
 
 
 ## Fixed validation order: shape first, then content, then spawn count.
@@ -24,18 +25,30 @@ static func validate_grid(rows: PackedStringArray, level_idx: int) -> String:
 	if width > GRID_W or rows.size() > GRID_H:
 		return "level %d: grid too large (%dx%d, max 20x11)" % [level_idx, width, rows.size()]
 	var spawns := 0
+	var flee_count := 0
+	var t_count := 0
 	for r: int in rows.size():
 		var row: String = rows[r]
 		for c: int in row.length():
 			var ch: String = row.substr(c, 1)
-			if ch != "#" and ch != "P" and ch != "." and ch != "^":
+			if ch != "#" and ch != "P" and ch != "." and ch != "^" and ch != "d" and ch != "D" and ch != "T":
 				return "level %d: invalid char '%s' at row %d col %d" % [level_idx, ch, r, c]
 			if ch == "P":
 				spawns += 1
+			elif ch == "D":
+				flee_count += 1
+			elif ch == "T":
+				t_count += 1
 	if spawns == 0:
 		return "level %d: missing P (no player spawn)" % level_idx
 	if spawns > 1:
 		return "level %d: extra P (found %d, expected exactly 1)" % [level_idx, spawns]
+	if flee_count > 1:
+		return "level %d: extra D (found %d, expected at most 1)" % [level_idx, flee_count]
+	if flee_count == 1 and t_count != 1:
+		return "level %d: D requires exactly one T (found %d)" % [level_idx, t_count]
+	if flee_count == 0 and t_count > 0:
+		return "level %d: stray T without D" % level_idx
 	return ""
 
 
@@ -67,6 +80,9 @@ static func build_from_rows(rows: PackedStringArray, level_idx: int) -> Node2D:
 	level.name = "Level"
 	var spawn := Vector2.ZERO
 	var spike_cells: Array[Vector2i] = []
+	var door_cells: Array[Vector2i] = []
+	var flee_cells: Array[Vector2i] = []
+	var t_cells: Array[Vector2i] = []
 	for r: int in rows.size():
 		var row: String = rows[r]
 		for c: int in row.length():
@@ -78,6 +94,13 @@ static func build_from_rows(rows: PackedStringArray, level_idx: int) -> Node2D:
 					spawn = center
 				"^":
 					spike_cells.append(Vector2i(c, r))
+				"d":
+					door_cells.append(Vector2i(c, r))
+				"D":
+					door_cells.append(Vector2i(c, r))
+					flee_cells.append(Vector2i(c, r))
+				"T":
+					t_cells.append(Vector2i(c, r))
 	var spike_packed := load(SPIKE_SCENE_PATH) as PackedScene
 	if not spike_cells.is_empty():
 		if spike_packed == null:
@@ -94,6 +117,27 @@ static func build_from_rows(rows: PackedStringArray, level_idx: int) -> Node2D:
 			spike.position = Vector2(cell.x * TILE_SIZE + TILE_SIZE / 2, cell.y * TILE_SIZE + TILE_SIZE / 2)
 			spike.add_to_group("spikes")
 			level.add_child(spike)
+	if not door_cells.is_empty():
+		var door_packed := load(DOOR_SCENE_PATH) as PackedScene
+		if door_packed == null:
+			push_error("[LevelBuilder] level %d: could not load door scene %s" % [level_idx, DOOR_SCENE_PATH])
+			level.free()
+			return null
+		var t_center := Vector2.ZERO
+		if t_cells.size() == 1:
+			t_center = Vector2(t_cells[0].x * TILE_SIZE + TILE_SIZE / 2, t_cells[0].y * TILE_SIZE + TILE_SIZE / 2)
+		for cell: Vector2i in door_cells:
+			var door := door_packed.instantiate() as Node2D
+			if door == null:
+				push_error("[LevelBuilder] level %d: could not instantiate door scene %s" % [level_idx, DOOR_SCENE_PATH])
+				level.free()
+				return null
+			door.name = "Door_%d_%d" % [cell.x, cell.y]
+			door.position = Vector2(cell.x * TILE_SIZE + TILE_SIZE / 2, cell.y * TILE_SIZE + TILE_SIZE / 2)
+			door.add_to_group("doors")
+			level.add_child(door)
+			if door.has_method("setup"):
+				door.call("setup", flee_cells.has(cell), t_center, spawn)
 	var packed := load(PLAYER_SCENE_PATH) as PackedScene
 	if packed == null:
 		push_error("[LevelBuilder] level %d: could not load player scene %s" % [level_idx, PLAYER_SCENE_PATH])
