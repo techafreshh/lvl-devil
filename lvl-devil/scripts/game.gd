@@ -7,7 +7,7 @@ class_name GameManager extends Node
 
 
 const FREEZE_TIME := 0.1
-const EXIT_DELAY := 0.3
+const EXIT_DELAY := 0.2
 const KILL_Y := 376.0
 const DEATH_SFX_PATH := "res://sfx/death.wav"
 
@@ -65,13 +65,13 @@ func _on_spike_killed(_spike: Node) -> void:
 	request_death("spike")
 
 
-## Advances to the next shipped level; loud false when none remains.
+## Advances to the next dev level, wrapping around the gauntlet forever so
+## a door on the last level loops back to dev level 0 and never loud-fails.
 func next_level() -> bool:
-	var nxt := current_level + 1
-	if nxt < 0 or nxt >= Levels.count():
-		push_error("[Game] level %d: no next level (have %d levels)" % [current_level, Levels.count()])
+	if Levels.count() <= 0:
+		push_error("[Game] no levels to advance to")
 		return false
-	return start_level(nxt)
+	return start_level((current_level + 1) % Levels.count())
 
 
 func _on_door_exited(_door: Node) -> void:
@@ -151,8 +151,14 @@ func _burst_particles(at: Vector2) -> void:
 	burst.position = at - get_global_offset()
 	add_child(burst)
 	burst.emitting = true
-	var timer := get_tree().create_timer(1.0)
-	timer.timeout.connect(func() -> void: if is_instance_valid(burst): burst.queue_free())
+	# Child timer dies with the burst (and the manager), so freeing the
+	# level mid-burst never leaves a dangling SceneTreeTimer lambda behind.
+	var timer := Timer.new()
+	timer.wait_time = 1.0
+	timer.one_shot = true
+	burst.add_child(timer)
+	timer.timeout.connect(burst.queue_free)
+	timer.start()
 
 
 ## Global offset of this manager in world space (Main sits at the origin,
