@@ -77,7 +77,7 @@ func test_spike_death_respawn() -> bool:
 	var ok := true
 	var mgr := make_manager()
 	await process_frame
-	ok = expect(mgr.start_level(0), "spike-death: start_level(0) builds") and ok
+	ok = expect(mgr.start_level(1), "spike-death: start_level(1) builds") and ok
 	if not ok:
 		await cleanup_manager(mgr)
 		return ok

@@ -1,13 +1,15 @@
 class_name Levels extends RefCounted
-## Dev-level gauntlet grids as plain text (batch-1 trap proof set).
+## Teach-beat chapters as plain text (ordered L1-L5 trap lessons).
 ## Legend: `#` solid, `P` player spawn (exactly one per level), `.` empty,
 ## `^` pop-up spike, `X` falling tile, `d` static exit, `D` fleeing door,
 ## `T` fleeing-door landing cell, `H` fake floor, `V` hidden wall.
 ## One cell per char, rows stored top-down on the 32px grid (20x11, 640x360).
-## `P` stays at col 2 row 8 so the spawn is (80, 272) on every dev level.
+## `P` stays at col 2 row 8 so the spawn is (80, 272) on every chapter.
+## Teach order: L1 `X` fall, L2 `^` singles, L3 fleeing `D`->`T`,
+## L4 `H` pit, L5 static `d` baited by `^`.
 
 
-const DEV_0: PackedStringArray = [
+const LVL_1: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
@@ -16,12 +18,12 @@ const DEV_0: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
-	"..P..^.XXX....d.....",
-	"#######...##########",
-	"#######...##########",
+	"..P.............d...",
+	"#######XXX##########",
+	"####################",
 ]
 
-const DEV_1: PackedStringArray = [
+const LVL_2: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
@@ -30,12 +32,12 @@ const DEV_1: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
-	"..P..T..D.....d.....",
+	"..P....^....^...d...",
 	"####################",
 	"####################",
 ]
 
-const DEV_2: PackedStringArray = [
+const LVL_3: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
@@ -44,12 +46,12 @@ const DEV_2: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
-	"..P.....H...V..d....",
-	"########.###########",
-	"########.###########",
+	"..P..........D..T...",
+	"####################",
+	"####################",
 ]
 
-const DEV_3: PackedStringArray = [
+const LVL_4: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
@@ -58,17 +60,29 @@ const DEV_3: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
-	"..P...XX^X....d.....",
-	"######....##########",
-	"######....##########",
+	"..P.............d...",
+	"##########H#########",
+	"##########.#########",
 ]
 
-const DEV_LEVELS: Array[PackedStringArray] = [DEV_0, DEV_1, DEV_2, DEV_3]
+const LVL_5: PackedStringArray = [
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"..P...........^.d...",
+	"####################",
+	"####################",
+]
 
-const ALL: Array[PackedStringArray] = [DEV_0, DEV_1, DEV_2, DEV_3]
+const ALL: Array[PackedStringArray] = [LVL_1, LVL_2, LVL_3, LVL_4, LVL_5]
 
 
-## Number of dev levels.
+## Number of teach chapters.
 static func count() -> int:
 	return ALL.size()
 
