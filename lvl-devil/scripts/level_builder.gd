@@ -12,6 +12,9 @@ const PLAYER_SCENE_PATH := "res://scenes/player.tscn"
 const SPIKE_SCENE_PATH := "res://scenes/spike.tscn"
 const DOOR_SCENE_PATH := "res://scenes/door.tscn"
 
+## Shared floor color so fake floors (`H`) draw pixel-identical to solids (`#`).
+const FLOOR_COLOR := Color(0.85, 0.82, 0.75)
+
 
 ## Fixed validation order: shape first, then content, then spawn count.
 ## Returns "" when the grid is valid, else the loud-failure reason.
@@ -31,7 +34,7 @@ static func validate_grid(rows: PackedStringArray, level_idx: int) -> String:
 		var row: String = rows[r]
 		for c: int in row.length():
 			var ch: String = row.substr(c, 1)
-			if ch != "#" and ch != "P" and ch != "." and ch != "^" and ch != "X" and ch != "d" and ch != "D" and ch != "T":
+			if ch != "#" and ch != "P" and ch != "." and ch != "^" and ch != "X" and ch != "d" and ch != "D" and ch != "T" and ch != "H" and ch != "V":
 				return "level %d: invalid char '%s' at row %d col %d" % [level_idx, ch, r, c]
 			if ch == "P":
 				spawns += 1
@@ -65,8 +68,37 @@ static func _make_solid(col: int, row: int, center: Vector2) -> StaticBody2D:
 	var visual := ColorRect.new()
 	visual.size = Vector2(TILE_SIZE, TILE_SIZE)
 	visual.position = Vector2(-TILE_SIZE / 2, -TILE_SIZE / 2)
-	visual.color = Color(0.85, 0.82, 0.75)
+	visual.color = FLOOR_COLOR
 	body.add_child(visual)
+	return body
+
+
+## Fake floor (`H`): looks exactly like a solid but never collides.
+## A plain Node2D (never StaticBody2D, never in `solid_tiles`).
+static func _make_fake_floor(col: int, row: int, center: Vector2) -> Node2D:
+	var tile := Node2D.new()
+	tile.name = "FakeFloor_%d_%d" % [col, row]
+	tile.position = center
+	var visual := ColorRect.new()
+	visual.size = Vector2(TILE_SIZE, TILE_SIZE)
+	visual.position = Vector2(-TILE_SIZE / 2, -TILE_SIZE / 2)
+	visual.color = FLOOR_COLOR
+	tile.add_child(visual)
+	return tile
+
+
+## Hidden wall (`V`): blocks like a solid but draws nothing (background).
+## A normal StaticBody2D in `solid_tiles` with zero visual children.
+static func _make_hidden_wall(col: int, row: int, center: Vector2) -> StaticBody2D:
+	var body := StaticBody2D.new()
+	body.name = "Solid_%d_%d" % [col, row]
+	body.position = center
+	body.add_to_group("solid_tiles")
+	var shape_node := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(TILE_SIZE, TILE_SIZE)
+	shape_node.shape = rect
+	body.add_child(shape_node)
 	return body
 
 
@@ -95,6 +127,10 @@ static func build_from_rows(rows: PackedStringArray, level_idx: int) -> Node2D:
 					tile.name = "FallingTile_%d_%d" % [c, r]
 					tile.position = center
 					level.add_child(tile)
+				"H":
+					level.add_child(_make_fake_floor(c, r, center))
+				"V":
+					level.add_child(_make_hidden_wall(c, r, center))
 				"P":
 					spawn = center
 				"^":
