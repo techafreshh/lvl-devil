@@ -103,3 +103,7 @@ jobs:
       - name: Run levels-6-10 tests
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_levels_6_10.gd
+
+      - name: Run SFX tests
+        timeout-minutes: 5
+        run: godot --headless --path lvl-devil --script res://tests/test_sfx.gd

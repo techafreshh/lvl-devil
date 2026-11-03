@@ -104,6 +104,18 @@ func has_dodged() -> bool:
 	return _dodged
 
 
+## Uh-oh sting at the dodge start; silent no-op with no game node.
+func _play_sting() -> void:
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var game := tree.get_first_node_in_group("game")
+	if game != null and game.has_method("play_sting"):
+		game.play_sting()
+
+
 ## Dodge latch against a world position plus the player velocity.
 ## Returns the latched state so headless tests need no player node.
 ## Approaching is velocity-toward-door OR frame-over-frame distance
@@ -132,6 +144,7 @@ func _fire_dodge() -> void:
 	if _dodged:
 		return
 	_dodged = true
+	_play_sting()
 	var tw := create_tween()
 	tw.tween_property(self, "position", _target, DODGE_TIME)
 	tw.finished.connect(func() -> void: dodged.emit(self))

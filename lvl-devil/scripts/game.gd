@@ -9,7 +9,6 @@ class_name GameManager extends Node
 const FREEZE_TIME := 0.1
 const EXIT_DELAY := 0.2
 const KILL_Y := 376.0
-const DEATH_SFX_PATH := "res://sfx/death.wav"
 const STRIP_SCENE_PATH := "res://scenes/ui_strip.tscn"
 const TITLE_SCENE_PATH := "res://scenes/title.tscn"
 const END_SCENE_PATH := "res://scenes/end_card.tscn"
@@ -22,6 +21,7 @@ var total_deaths: int = 0
 var highest_level: int = 0
 var state: State = State.TITLE
 var strip: UIStrip = null
+var _sfx: SfxBus = null
 var title: TitleScreen = null
 var end_card: EndCard = null
 var level: Node2D = null
@@ -35,6 +35,7 @@ var _generation := 0
 
 func _ready() -> void:
 	add_to_group("game")
+	ensure_audio()
 	var loaded := Save.load_data()
 	highest_level = int(loaded.get("highest_level", 0))
 	total_deaths = int(loaded.get("total_deaths", 0))
@@ -42,6 +43,43 @@ func _ready() -> void:
 	ensure_title()
 	ensure_end_card()
 	show_title()
+
+
+## Creates the persistent SFX bus once (sibling of the rebuilt level so
+## death respawns never destroy it). Mirrors ensure_strip.
+func ensure_audio() -> void:
+	if _sfx != null and is_instance_valid(_sfx):
+		return
+	_sfx = SfxBus.new()
+	_sfx.name = "Sfx"
+	add_child(_sfx)
+
+
+## Fire-and-forget SFX passthroughs so trap/player nodes only need the
+## game-group lookup plus a has_method guard.
+func play_jump() -> void:
+	if _sfx != null and is_instance_valid(_sfx):
+		_sfx.play_jump()
+
+
+func play_sting() -> void:
+	if _sfx != null and is_instance_valid(_sfx):
+		_sfx.play_sting()
+
+
+func play_squelch() -> void:
+	if _sfx != null and is_instance_valid(_sfx):
+		_sfx.play_squelch()
+
+
+func play_chime() -> void:
+	if _sfx != null and is_instance_valid(_sfx):
+		_sfx.play_chime()
+
+
+func play_whoomph() -> void:
+	if _sfx != null and is_instance_valid(_sfx):
+		_sfx.play_whoomph()
 
 
 ## Creates the persistent HUD strip once (sibling of the rebuilt level so
@@ -160,6 +198,7 @@ func _start_from_title() -> bool:
 ## and wires every spike `killed` and door `exited` signal.
 ## Loud false on a null build.
 func start_level(idx: int) -> bool:
+	ensure_audio()
 	ensure_strip()
 	ensure_title()
 	ensure_end_card()
@@ -218,6 +257,7 @@ func next_level() -> bool:
 
 
 func _on_door_exited(_door: Node) -> void:
+	play_chime()
 	if _exiting:
 		return
 	if level == null or not is_instance_valid(level):
@@ -344,15 +384,7 @@ func get_global_offset() -> Vector2:
 	return Vector2.ZERO
 
 
-## Silent-safe death squelch: plays only when the wav has landed.
+## Death squelch via the persistent SFX bus (fire-and-forget, never
+## gates the wall-clock freeze timer).
 func _play_death_sfx() -> void:
-	if not ResourceLoader.exists(DEATH_SFX_PATH):
-		return
-	var stream := load(DEATH_SFX_PATH) as AudioStream
-	if stream == null:
-		return
-	var voice := AudioStreamPlayer.new()
-	voice.stream = stream
-	add_child(voice)
-	voice.finished.connect(voice.queue_free)
-	voice.play()
+	play_squelch()
