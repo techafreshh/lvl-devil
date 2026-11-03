@@ -6,6 +6,8 @@ extends SceneTree
 
 var passed := 0
 var failed := 0
+var _backup_exists := false
+var _backup_text := ""
 
 
 func _initialize() -> void:
@@ -17,6 +19,7 @@ func _initialize() -> void:
 func run_all() -> void:
 	# Nodes need a frame before they can enter the tree cleanly.
 	await process_frame
+	_backup_save()
 	var tests := [
 		"test_spike_death_respawn",
 		"test_restart_resets",
@@ -32,6 +35,7 @@ func run_all() -> void:
 			push_error("FAIL " + t + ": did not finish (runtime error?)")
 		# Flush freed nodes so the next test starts from a clean tree.
 		await process_frame
+	_restore_save()
 
 
 ## Non-counting check helper: never use bare assert() in a SceneTree runner.
@@ -53,6 +57,42 @@ func cleanup_manager(mgr: GameManager) -> void:
 		mgr.queue_free()
 	await process_frame
 	await physics_frame
+
+
+func _wipe(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(path)
+
+
+func _read_text(path: String) -> String:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var text := file.get_as_text()
+	file.close()
+	return text
+
+
+func _write_text(path: String, text: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(text)
+	file.close()
+	return true
+
+
+func _backup_save() -> void:
+	_backup_exists = FileAccess.file_exists(Save.SAVE_PATH)
+	if _backup_exists:
+		_backup_text = _read_text(Save.SAVE_PATH)
+
+
+func _restore_save() -> void:
+	if _backup_exists:
+		_write_text(Save.SAVE_PATH, _backup_text)
+	else:
+		_wipe(Save.SAVE_PATH)
 
 
 func player_at_spawn(mgr: GameManager) -> bool:
