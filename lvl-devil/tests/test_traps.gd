@@ -1,0 +1,567 @@
+extends SceneTree
+## Headless trap-gauntlet behavior suite: proves every batch-1 trap family
+## together in the four in-repo dev levels. Run with:
+##   godot --headless --path lvl-devil --script res://tests/test_traps.gd
+## (Godot has no `--test` flag; `--script` is the documented entry.)
+## Exits 1 when any check fails so CI can gate on the exit code.
+
+
+const SpikeScene := preload("res://scenes/spike.tscn")
+const PlayerScene := preload("res://scenes/player.tscn")
+
+var passed := 0
+var failed := 0
+
+
+func _initialize() -> void:
+	await run_all()
+	print("Results: %d passed, %d failed" % [passed, failed])
+	if failed == 0:
+		print("PASS trigger-radius spikes ~1.2 tiles")
+		print("PASS trigger-radius doors ~5 tiles")
+		print("PASS drop-timing falling tiles ~0.12s")
+		print("PASS flee-once runaway door")
+		print("PASS reset-on-respawn ^XDHV")
+	quit(1 if failed > 0 else 0)
+
+
+func run_all() -> void:
+	# Nodes need a frame before they can enter the tree cleanly.
+	await process_frame
+	var tests := [
+		"test_dev_levels_valid",
+		"test_trigger_radius_spikes",
+		"test_trigger_radius_doors",
+		"test_drop_timing_X",
+		"test_flee_once_D",
+		"test_reset_on_respawn",
+		"test_dev_levels_stable_300_frames",
+	]
+	for t: String in tests:
+		release_all()
+		var ok = await call(t)
+		release_all()
+		if ok == true:
+			passed += 1
+			print("PASS " + t)
+		else:
+			failed += 1
+			push_error("FAIL " + t + ": did not finish (runtime error?)")
+		# Flush freed nodes so the next test starts from a clean tree.
+		await process_frame
+
+
+## Counting check helper: never use bare assert() in a SceneTree runner.
+func expect(cond: bool, label: String) -> bool:
+	if cond:
+		passed += 1
+	else:
+		failed += 1
+		push_error("FAIL " + label)
+	return cond
+
+
+func release_all() -> void:
+	for a: String in ["move_left", "move_right", "jump"]:
+		Input.action_release(a)
+
+
+func count_char(rows: PackedStringArray, target: String) -> int:
+	var n := 0
+	for row: String in rows:
+		for c: int in row.length():
+			if row.substr(c, 1) == target:
+				n += 1
+	return n
+
+
+func has_row_with(rows: PackedStringArray, sub: String) -> bool:
+	for row: String in rows:
+		if row.contains(sub):
+			return true
+	return false
+
+
+func cell_center(col: int, row: int) -> Vector2:
+	return Vector2(col * 32 + 16, row * 32 + 16)
+
+
+func make_manager() -> GameManager:
+	var mgr := GameManager.new()
+	mgr.name = "Game"
+	root.add_child(mgr)
+	return mgr
+
+
+func cleanup_manager(mgr: GameManager) -> void:
+	if is_instance_valid(mgr):
+		mgr.queue_free()
+	await sweep_strays()
+
+
+## Frees stray level/group nodes, then settles two frames of hygiene.
+func sweep_strays() -> void:
+	for n: Node in root.get_children():
+		if n.is_in_group("player") or n.is_in_group("spikes") or n.is_in_group("doors") or n.is_in_group("falling_tiles") or n.is_in_group("solid_tiles") or n.name == "Level":
+			n.queue_free()
+	await process_frame
+	await physics_frame
+
+
+func free_level(level: Node) -> void:
+	if is_instance_valid(level):
+		level.queue_free()
+	await sweep_strays()
+
+
+func player_at_spawn(mgr: GameManager) -> bool:
+	if mgr.player == null or not is_instance_valid(mgr.player):
+		return false
+	return (mgr.player as Node2D).global_position.distance_to(mgr.spawn_pos) <= 2.0
+
+
+func make_spike(at: Vector2) -> Area2D:
+	var s := SpikeScene.instantiate() as Area2D
+	s.position = at
+	root.add_child(s)
+	return s
+
+
+func make_player(at: Vector2) -> CharacterBody2D:
+	var p := PlayerScene.instantiate() as CharacterBody2D
+	p.position = at
+	p.add_to_group("player")
+	root.add_child(p)
+	return p
+
+
+func spike_shape_disabled(spike: Area2D) -> bool:
+	var col := spike.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if col == null:
+		return false
+	return col.disabled
+
+
+func tile_shape_disabled(tile: FallingTile) -> bool:
+	var col := tile.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if col == null:
+		return false
+	return col.disabled
+
+
+## Geometric standing check mirroring FallingTile.try_trigger.
+func is_standing(player: Node2D, tile: FallingTile) -> bool:
+	var d: Vector2 = player.global_position - tile.global_position
+	if absf(d.x) > 29.0:
+		return false
+	var bottom: float = player.global_position.y + 13.0
+	var top: float = tile.global_position.y - 16.0
+	return bottom >= top - 6.0 and bottom <= top + 6.0
+
+
+## Steps the player from `from_pos` toward `goal` in 10px hops without
+## entering the exit overlap (stops 30px short).
+func step_toward(mgr: GameManager, door: FleeingDoor, from_pos: Vector2, goal: Vector2, max_steps: int) -> void:
+	var dir := (goal - from_pos).normalized()
+	if dir.length() < 0.5:
+		return
+	var pos := from_pos
+	for i: int in max_steps:
+		if not is_instance_valid(mgr.player) or not is_instance_valid(door):
+			return
+		if door.has_dodged():
+			return
+		if pos.distance_to(goal) < 30.0:
+			return
+		(mgr.player as Node2D).global_position = pos
+		(mgr.player as CharacterBody2D).velocity = Vector2.ZERO
+		await physics_frame
+		await process_frame
+		pos += dir * 10.0
+
+
+func first_visual(node: Node) -> ColorRect:
+	for child: Node in node.get_children():
+		if child is ColorRect:
+			return child as ColorRect
+	return null
+
+
+func test_dev_levels_valid() -> bool:
+	var ok := true
+	ok = expect(Levels.count() == 4, "dev-levels: exactly 4 dev levels (got %d)" % Levels.count()) and ok
+	ok = expect(Levels.DEV_LEVELS.size() == 4, "dev-levels: DEV_LEVELS holds 4 grids") and ok
+	for i: int in 4:
+		var rows: PackedStringArray = Levels.get_level(i)
+		ok = expect(rows.size() == 11, "dev-levels: level %d has 11 rows (got %d)" % [i, rows.size()]) and ok
+		for r: int in rows.size():
+			ok = expect(rows[r].length() == 20, "dev-levels: level %d row %d is 20 wide (got %d)" % [i, r, rows[r].length()]) and ok
+		ok = expect(count_char(rows, "P") == 1, "dev-levels: level %d has exactly one P" % i) and ok
+		var reason := LevelBuilder.validate_grid(rows, i)
+		ok = expect(reason == "", "dev-levels: level %d validates (got '%s')" % [i, reason]) and ok
+		var level := LevelBuilder.build(i)
+		ok = expect(level != null, "dev-levels: level %d builds" % i) and ok
+		if level == null:
+			continue
+		root.add_child(level)
+		await process_frame
+		var spawn: Vector2 = (level.get_node_or_null("Player") as Node2D).global_position
+		ok = expect(spawn.distance_to(Vector2(80, 272)) <= 1.0, "dev-levels: level %d spawns at (80, 272) (got %s)" % [i, spawn]) and ok
+		await free_level(level)
+	# Per-level trap coverage: chained X, D+d fakeout, H+V ambush, ^+X gauntlet.
+	var dev0: PackedStringArray = Levels.get_level(0)
+	ok = expect(has_row_with(dev0, "XX"), "dev-levels: DEV_0 chains X") and ok
+	ok = expect(count_char(dev0, "^") >= 1, "dev-levels: DEV_0 keeps ^ on solid") and ok
+	ok = expect(count_char(dev0, "d") == 1 and count_char(dev0, "D") == 0, "dev-levels: DEV_0 has a lone static d") and ok
+	var dev1: PackedStringArray = Levels.get_level(1)
+	ok = expect(count_char(dev1, "D") == 1 and count_char(dev1, "d") == 1, "dev-levels: DEV_1 pairs D with a d fakeout") and ok
+	ok = expect(count_char(dev1, "T") == 1, "dev-levels: DEV_1 has exactly one T") and ok
+	var dev2: PackedStringArray = Levels.get_level(2)
+	ok = expect(count_char(dev2, "H") >= 1 and count_char(dev2, "V") >= 1, "dev-levels: DEV_2 runs the H/V ambush corridor") and ok
+	var dev3: PackedStringArray = Levels.get_level(3)
+	ok = expect(count_char(dev3, "^") >= 1 and count_char(dev3, "X") >= 1, "dev-levels: DEV_3 combines ^ with X") and ok
+	return ok
+
+
+func test_trigger_radius_spikes() -> bool:
+	var ok := true
+	var spike := make_spike(Vector2(0, 0))
+	var player := make_player(Vector2(160, 0))
+	await process_frame
+	# 5 tiles away (~160px): retracted over 10 physics frames, shape disabled.
+	for i: int in 10:
+		await physics_frame
+	ok = expect(not (spike as PopupSpike).is_active(), "spike-radius: retracted at ~5 tiles (160px)") and ok
+	ok = expect(spike_shape_disabled(spike), "spike-radius: shape disabled while retracted") and ok
+	# Same-row within ~1.2 tiles (38px): latched within 2 frames.
+	(player as Node2D).global_position = Vector2(38, 0)
+	for i: int in 2:
+		await physics_frame
+		if (spike as PopupSpike).is_active():
+			break
+	ok = expect((spike as PopupSpike).is_active(), "spike-radius: active within 2 frames at ~1.2 tiles") and ok
+	if is_instance_valid(spike):
+		spike.queue_free()
+	if is_instance_valid(player):
+		player.queue_free()
+	await sweep_strays()
+	return ok
+
+
+func test_trigger_radius_doors() -> bool:
+	var ok := true
+	# D (~128px, inside the ~5-tile / 160px range) with its T landing cell.
+	var rows := PackedStringArray(["..........", "..P...D.T.", "##########"])
+	ok = expect(LevelBuilder.validate_grid(rows, 41) == "", "door-radius: D+T grid validates") and ok
+	var level := LevelBuilder.build_from_rows(rows, 41)
+	ok = expect(level != null, "door-radius: D+T grid builds") and ok
+	if level == null:
+		return ok
+	root.add_child(level)
+	await process_frame
+	await physics_frame
+	var door: FleeingDoor = null
+	for child: Node in level.get_children():
+		if child is FleeingDoor:
+			door = child as FleeingDoor
+			break
+	ok = expect(door != null, "door-radius: door node exists") and ok
+	if door == null:
+		await free_level(level)
+		return ok
+	var player := level.get_node_or_null("Player") as CharacterBody2D
+	var door_home: Vector2 = (door as Node2D).global_position
+	# Settle onto the floor, then the unmoved player must never trip the dodge.
+	for i: int in 10:
+		await physics_frame
+	var base: Vector2 = (player as Node2D).global_position
+	for i: int in 120:
+		await physics_frame
+	ok = expect(not door.has_dodged(), "door-radius: no dodge over 120 unmoved frames inside ~5 tiles") and ok
+	ok = expect((door as Node2D).global_position.distance_to(door_home) < 2.0, "door-radius: door drift <2px while player idle") and ok
+	# Walk toward the door: leaving spawn and approaching must trip the dodge.
+	var goal: Vector2 = (door as Node2D).global_position
+	var pos := base
+	var dir := (goal - base).normalized()
+	var dodged_frame := -1
+	for i: int in 40:
+		if door.has_dodged():
+			dodged_frame = i
+			break
+		(player as Node2D).global_position = pos
+		(player as CharacterBody2D).velocity = Vector2(170, 0)
+		await physics_frame
+		await process_frame
+		if pos.distance_to(goal) > 30.0:
+			pos += dir * 10.0
+	ok = expect(door.has_dodged(), "door-radius: dodge fires after leaving spawn and approaching") and ok
+	ok = expect((player as Node2D).global_position.distance_to(base) > 32.0, "door-radius: player left the spawn gate (>32px)") and ok
+	# The dodge lands the door on its T cell within ~0.3s (>=24 physics frames).
+	var target := cell_center(8, 1)
+	var landed_frame := -1
+	for i: int in 40:
+		await physics_frame
+		await process_frame
+		if (door as Node2D).global_position.distance_to(target) < 4.0:
+			landed_frame = i
+			break
+	ok = expect(landed_frame >= 0 and landed_frame <= 24, "door-radius: door lands on T within 24 frames (got %d)" % landed_frame) and ok
+	await free_level(level)
+	return ok
+
+
+func test_drop_timing_X() -> bool:
+	var ok := true
+	var tile_a := FallingTile.new()
+	tile_a.position = Vector2(80, 100)
+	root.add_child(tile_a)
+	var tile_b := FallingTile.new()
+	tile_b.position = Vector2(400, 100)
+	root.add_child(tile_b)
+	# Player stands exactly on tile A (bottom 84 = tile top 84).
+	var player := make_player(Vector2(80, 71))
+	await process_frame
+	var latch_a := -1
+	var drop_a := -1
+	var latch_b := -1
+	var drop_b := -1
+	var moved_b := false
+	for f: int in 70:
+		await physics_frame
+		if tile_a.is_shaking() or tile_a.has_dropped():
+			if latch_a < 0:
+				latch_a = f
+		if tile_a.has_dropped() and drop_a < 0:
+			drop_a = f
+		# Second tile steps on 12 frames after the first latched.
+		if latch_a >= 0 and not moved_b and f >= latch_a + 12:
+			(player as Node2D).global_position = Vector2(400, 71)
+			(player as CharacterBody2D).velocity = Vector2.ZERO
+			moved_b = true
+		if moved_b and (tile_b.is_shaking() or tile_b.has_dropped()):
+			if latch_b < 0:
+				latch_b = f
+		if tile_b.has_dropped() and drop_b < 0:
+			drop_b = f
+		if drop_a >= 0 and drop_b >= 0:
+			break
+	ok = expect(latch_a >= 0 and latch_a <= 2, "drop-timing: first tile latches on standing (frame %d)" % latch_a) and ok
+	if latch_a >= 0:
+		ok = expect(drop_a < 0 or drop_a > latch_a + 5, "drop-timing: no drop in the first 5 physics frames") and ok
+	ok = expect(drop_a >= 0 and drop_a <= latch_a + 12, "drop-timing: first tile drops after ~0.12s shake (frame %d)" % drop_a) and ok
+	if drop_a >= 0:
+		ok = expect(tile_a.position.y - tile_a.home_pos().y > 16.0, "drop-timing: tile falls >16px (got %s)" % (tile_a.position.y - tile_a.home_pos().y)) and ok
+		await process_frame
+		ok = expect(tile_shape_disabled(tile_a), "drop-timing: shape disabled once falling") and ok
+	ok = expect(moved_b and latch_b >= 0, "drop-timing: second tile latches on its own step") and ok
+	ok = expect(drop_a >= 0 and drop_b >= 0, "drop-timing: both tiles drop") and ok
+	if drop_a >= 0 and drop_b >= 0:
+		var gap := drop_b - drop_a
+		ok = expect(gap >= 6 and gap <= 19, "drop-timing: chained drops 6-19 frames apart (got %d)" % gap) and ok
+	if is_instance_valid(tile_a):
+		tile_a.queue_free()
+	if is_instance_valid(tile_b):
+		tile_b.queue_free()
+	if is_instance_valid(player):
+		player.queue_free()
+	await sweep_strays()
+	return ok
+
+
+func test_flee_once_D() -> bool:
+	var ok := true
+	var mgr := make_manager()
+	await process_frame
+	ok = expect(mgr.start_level(1), "flee-once: start_level(1) builds DEV_1") and ok
+	if not ok:
+		await cleanup_manager(mgr)
+		return ok
+	await process_frame
+	await physics_frame
+	# Pin the fleeing D cell (not the static d fakeout) from the grid.
+	var rows: PackedStringArray = Levels.get_level(1)
+	var d_pos := Vector2(-1, -1)
+	for r: int in rows.size():
+		for c: int in rows[r].length():
+			if rows[r].substr(c, 1) == "D":
+				d_pos = cell_center(c, r)
+	ok = expect(d_pos.x >= 0.0, "flee-once: DEV_1 grid has a D cell") and ok
+	var door: FleeingDoor = null
+	for child: Node in mgr.level.get_children():
+		if child is FleeingDoor and (child as Node2D).global_position.distance_to(d_pos) <= 1.0:
+			door = child as FleeingDoor
+			break
+	ok = expect(door != null, "flee-once: fleeing door node exists at the D cell") and ok
+	if door == null:
+		await cleanup_manager(mgr)
+		return ok
+	var spawn: Vector2 = mgr.spawn_pos
+	var marks: Array = []
+	door.dodged.connect(func(_d: Node) -> void: marks.append(Time.get_ticks_msec()))
+	var dir := ((door as Node2D).global_position - spawn).normalized()
+	await step_toward(mgr, door, spawn + dir * 40.0, (door as Node2D).global_position, 30)
+	ok = expect(door.has_dodged(), "flee-once: dodge fires after leaving spawn") and ok
+	for i: int in 40:
+		await process_frame
+		await physics_frame
+	# Re-approach in the same attempt: exactly one dodge, position holds.
+	var after: Vector2 = (door as Node2D).global_position
+	await step_toward(mgr, door, after + Vector2(-100, 0), after, 20)
+	ok = expect(marks.size() == 1, "flee-once: no second dodge on re-approach (got %d)" % marks.size()) and ok
+	ok = expect((door as Node2D).global_position.distance_to(after) < 2.0, "flee-once: door holds position on re-approach") and ok
+	# Still catchable: touching the dodged door exits into the next dev level.
+	var exited_marks: Array = []
+	door.exited.connect(func(_d: Node) -> void: exited_marks.append(1))
+	(mgr.player as Node2D).global_position = (door as Node2D).global_position
+	var t0 := Time.get_ticks_msec()
+	var advanced := false
+	for i: int in 90:
+		await physics_frame
+		await process_frame
+		if not is_instance_valid(mgr):
+			break
+		if mgr.current_level == 2 and mgr.level_idx == 2:
+			advanced = true
+			break
+		if Time.get_ticks_msec() - t0 > 800:
+			break
+	ok = expect(not exited_marks.is_empty(), "flee-once: touch after dodge emits exited") and ok
+	ok = expect(advanced, "flee-once: dodged door still advances the gauntlet") and ok
+	await cleanup_manager(mgr)
+	return ok
+
+
+func test_reset_on_respawn() -> bool:
+	var ok := true
+	for idx: int in 4:
+		var mgr := make_manager()
+		await process_frame
+		ok = expect(mgr.start_level(idx), "reset: start_level(%d) builds" % idx) and ok
+		if not ok:
+			await cleanup_manager(mgr)
+			return ok
+		await process_frame
+		await physics_frame
+		var rows: PackedStringArray = Levels.get_level(idx)
+		# Trip every trap on the level without overlapping a kill zone.
+		for child: Node in mgr.level.get_children():
+			if child is PopupSpike:
+				(mgr.player as Node2D).global_position = (child as Node2D).global_position + Vector2(-30, 0)
+				(mgr.player as CharacterBody2D).velocity = Vector2.ZERO
+				for i: int in 5:
+					await physics_frame
+				ok = expect((child as PopupSpike).is_active(), "reset: level %d spike latches before death" % idx) and ok
+		for child: Node in mgr.level.get_children():
+			if child is FallingTile:
+				var tile := child as FallingTile
+				(mgr.player as Node2D).global_position = tile.global_position + Vector2(0, -29)
+				(mgr.player as CharacterBody2D).velocity = Vector2.ZERO
+				var latched := false
+				for i: int in 30:
+					await physics_frame
+					if tile.is_shaking() or tile.has_dropped():
+						latched = true
+						break
+				ok = expect(latched, "reset: level %d X tile trips before death" % idx) and ok
+				break
+		for child: Node in mgr.level.get_children():
+			if child is FleeingDoor:
+				var dc := child as FleeingDoor
+				var dcell := Vector2(-1, -1)
+				for r: int in rows.size():
+					for c: int in rows[r].length():
+						if rows[r].substr(c, 1) == "D":
+							dcell = cell_center(c, r)
+				if dcell.x >= 0.0 and (dc as Node2D).global_position.distance_to(dcell) <= 1.0:
+					var spawn: Vector2 = mgr.spawn_pos
+					var ddir := ((dc as Node2D).global_position - spawn).normalized()
+					await step_toward(mgr, dc, spawn + ddir * 40.0, (dc as Node2D).global_position, 30)
+					ok = expect(dc.has_dodged(), "reset: level %d D door dodges before death" % idx) and ok
+		# Force death; the trip above never overlaps, so this call owns the clock.
+		var old_player := mgr.player
+		var t0 := Time.get_ticks_msec()
+		mgr.request_death("trap-proof")
+		var back := false
+		var elapsed := 0
+		for i: int in 60:
+			await process_frame
+			if player_at_spawn(mgr) and mgr.player != old_player:
+				elapsed = Time.get_ticks_msec() - t0
+				back = true
+				break
+		ok = expect(back, "reset: level %d death returns to P" % idx) and ok
+		if back:
+			ok = expect(elapsed < 500, "reset: level %d respawn <0.5s (got %dms)" % [idx, elapsed]) and ok
+		else:
+			await cleanup_manager(mgr)
+			return ok
+		await process_frame
+		await physics_frame
+		await process_frame
+		# Fresh rebuild: every trap family back at grid state.
+		for child: Node in mgr.level.get_children():
+			if child is PopupSpike:
+				ok = expect(not (child as PopupSpike).is_active(), "reset: level %d ^ retracted after respawn" % idx) and ok
+			if child is FallingTile:
+				var tile := child as FallingTile
+				ok = expect(tile.position.distance_to(tile.home_pos()) <= 1.0, "reset: level %d X home after respawn" % idx) and ok
+				ok = expect(not tile.is_shaking() and not tile.has_dropped(), "reset: level %d X idle+solid after respawn" % idx) and ok
+				ok = expect(not tile_shape_disabled(tile), "reset: level %d X collision back after respawn" % idx) and ok
+		var want_doors := []
+		for r: int in rows.size():
+			for c: int in rows[r].length():
+				var ch: String = rows[r].substr(c, 1)
+				if ch == "d" or ch == "D":
+					want_doors.append(cell_center(c, r))
+		var n_doors := 0
+		for child: Node in mgr.level.get_children():
+			if child is FleeingDoor:
+				n_doors += 1
+				var at_home := false
+				for w: Vector2 in want_doors:
+					if (child as Node2D).global_position.distance_to(w) <= 1.0:
+						at_home = true
+				ok = expect(at_home, "reset: level %d door home after respawn" % idx) and ok
+				ok = expect(not (child as FleeingDoor).has_dodged(), "reset: level %d door undodged after respawn" % idx) and ok
+		ok = expect(n_doors == want_doors.size(), "reset: level %d keeps %d doors" % [idx, want_doors.size()]) and ok
+		var solid_visual := first_visual(mgr.level.get_node_or_null("Solid_0_9"))
+		for child: Node in mgr.level.get_children():
+			if child is Node2D and (child as Node).name.begins_with("FakeFloor_"):
+				var fv := first_visual(child)
+				ok = expect(fv != null, "reset: level %d H keeps its visual" % idx) and ok
+				if fv != null and solid_visual != null:
+					ok = expect(fv.color == solid_visual.color and fv.size == solid_visual.size and fv.position == solid_visual.position, "reset: level %d H color-identical after respawn" % idx) and ok
+			if child is StaticBody2D and not (child is FallingTile) and (child as Node).name.begins_with("Solid_"):
+				var parts := (child as Node).name.split("_")
+				if parts.size() == 3 and rows[parts[2].to_int()].substr(parts[1].to_int(), 1) == "V":
+					ok = expect((child as Node).is_in_group("solid_tiles"), "reset: level %d V still blocking after respawn" % idx) and ok
+					ok = expect((child as Node).find_children("*", "ColorRect", true, false).is_empty(), "reset: level %d V still invisible after respawn" % idx) and ok
+		await cleanup_manager(mgr)
+	return ok
+
+
+func test_dev_levels_stable_300_frames() -> bool:
+	var ok := true
+	for idx: int in 4:
+		var mgr := make_manager()
+		await process_frame
+		ok = expect(mgr.start_level(idx), "stable: start_level(%d) builds" % idx) and ok
+		if not ok:
+			await cleanup_manager(mgr)
+			return ok
+		await process_frame
+		# Hold right for 300 headless physics frames; completing is the probe:
+		# doors may advance (and wrap), falls may kill and respawn, but the
+		# tree must never hang or lose the player.
+		Input.action_press("move_right")
+		for i: int in 300:
+			await physics_frame
+		Input.action_release("move_right")
+		ok = expect(is_instance_valid(mgr) and is_instance_valid(mgr.level), "stable: level %d tree intact after 300 frames" % idx) and ok
+		ok = expect(is_instance_valid(mgr.player), "stable: level %d player intact after 300 frames" % idx) and ok
+		if is_instance_valid(mgr.player):
+			var p: Vector2 = (mgr.player as Node2D).global_position
+			ok = expect(p.x > -200.0 and p.x < 900.0 and p.y < 600.0, "stable: level %d player sane after 300 frames (got %s)" % [idx, p]) and ok
+		ok = expect(mgr.current_level >= 0 and mgr.current_level < 4, "stable: level %d gauntlet index sane" % idx) and ok
+		await cleanup_manager(mgr)
+	return ok

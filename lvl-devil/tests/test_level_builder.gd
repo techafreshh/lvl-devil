@@ -84,7 +84,9 @@ func test_valid_build() -> bool:
 		if child is StaticBody2D:
 			solids += 1
 			ok = expect(child.is_in_group("solid_tiles"), "valid: solid in solid_tiles group") and ok
-	ok = expect(solids == count_char(rows, "#"), "valid: solid count matches # count (got %d)" % solids) and ok
+	# FallingTile extends StaticBody2D in this tree, so dev grids carrying
+	# chained X count their tiles alongside the # solids.
+	ok = expect(solids == count_char(rows, "#") + count_char(rows, "X"), "valid: solid count matches # + X count (got %d)" % solids) and ok
 	var player := level.get_node_or_null("Player")
 	ok = expect(player != null, "valid: Player node exists") and ok
 	if player != null:

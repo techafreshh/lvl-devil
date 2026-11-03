@@ -1,26 +1,41 @@
 class_name Levels extends RefCounted
-## Batch-1 level grids as plain text.
-## Legend: `#` solid, `P` player spawn (exactly one per level), `.` empty, `^` pop-up spike.
+## Dev-level gauntlet grids as plain text (batch-1 trap proof set).
+## Legend: `#` solid, `P` player spawn (exactly one per level), `.` empty,
+## `^` pop-up spike, `X` falling tile, `d` static exit, `D` fleeing door,
+## `T` fleeing-door landing cell, `H` fake floor, `V` hidden wall.
 ## One cell per char, rows stored top-down on the 32px grid (20x11, 640x360).
-## `d` static exit, `D` fleeing door, `T` its landing cell.
-## Later issues extend the legend (`X HV`) and reuse this table.
+## `P` stays at col 2 row 8 so the spawn is (80, 272) on every dev level.
 
 
-const LEVEL_1: PackedStringArray = [
+const DEV_0: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
 	"....................",
 	"....................",
 	"....................",
-	"......####..........",
 	"....................",
-	"..P....^......####..",
+	"....................",
+	"..P..^.XXX....d.....",
+	"#######...##########",
+	"#######...##########",
+]
+
+const DEV_1: PackedStringArray = [
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"..P..T..D.....d.....",
 	"####################",
 	"####################",
 ]
 
-const LEVEL_2: PackedStringArray = [
+const DEV_2: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
@@ -29,12 +44,12 @@ const LEVEL_2: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
-	"..P...............d.",
-	"####################",
-	"####################",
+	"..P.....H...V..d....",
+	"########.###########",
+	"########.###########",
 ]
 
-const LEVEL_3: PackedStringArray = [
+const DEV_3: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
@@ -42,16 +57,18 @@ const LEVEL_3: PackedStringArray = [
 	"....................",
 	"....................",
 	"....................",
-	"..........T.........",
-	"..P...D..####.......",
-	"####################",
-	"####################",
+	"....................",
+	"..P...XX^X....d.....",
+	"######....##########",
+	"######....##########",
 ]
 
-const ALL: Array[PackedStringArray] = [LEVEL_1, LEVEL_2, LEVEL_3]
+const DEV_LEVELS: Array[PackedStringArray] = [DEV_0, DEV_1, DEV_2, DEV_3]
+
+const ALL: Array[PackedStringArray] = [DEV_0, DEV_1, DEV_2, DEV_3]
 
 
-## Number of shipped levels.
+## Number of dev levels.
 static func count() -> int:
 	return ALL.size()
 
