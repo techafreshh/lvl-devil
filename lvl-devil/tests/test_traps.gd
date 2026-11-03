@@ -186,9 +186,9 @@ func first_visual(node: Node) -> ColorRect:
 
 func test_dev_levels_valid() -> bool:
 	var ok := true
-	ok = expect(Levels.count() == 5, "dev-levels: exactly 5 teach chapters (got %d)" % Levels.count()) and ok
-	ok = expect(Levels.ALL.size() == 5, "dev-levels: ALL holds 5 grids") and ok
-	for i: int in 5:
+	ok = expect(Levels.count() == 10, "dev-levels: exactly 10 chapters (got %d)" % Levels.count()) and ok
+	ok = expect(Levels.ALL.size() == 10, "dev-levels: ALL holds 10 grids") and ok
+	for i: int in 10:
 		var rows: PackedStringArray = Levels.get_level(i)
 		ok = expect(rows.size() == 11, "dev-levels: level %d has 11 rows (got %d)" % [i, rows.size()]) and ok
 		for r: int in rows.size():
@@ -224,6 +224,23 @@ func test_dev_levels_valid() -> bool:
 	ok = expect(count_char(lvl5, "d") == 1, "dev-levels: L5 has a static d") and ok
 	ok = expect(count_char(lvl5, "^") == 1, "dev-levels: L5 baits with one ^") and ok
 	ok = expect(has_row_with(lvl5, "^.d"), "dev-levels: L5 parks ^ beside d") and ok
+	# Escalation chapters: L6 chained X, L7 ^+X, L8 sparing V, L9 full
+	# stack with a fleeing pair, L10 spike-guarded bait plus true exit.
+	var lvl6: PackedStringArray = Levels.get_level(5)
+	ok = expect(has_row_with(lvl6, "XX"), "dev-levels: L6 chains X") and ok
+	ok = expect(count_char(lvl6, "d") == 1 and count_char(lvl6, "D") == 0, "dev-levels: L6 has a lone static d") and ok
+	var lvl7: PackedStringArray = Levels.get_level(6)
+	ok = expect(count_char(lvl7, "^") == 2, "dev-levels: L7 keeps two ^ singles (got %d)" % count_char(lvl7, "^")) and ok
+	ok = expect(count_char(lvl7, "X") >= 1, "dev-levels: L7 keeps its X run-up") and ok
+	var lvl8: PackedStringArray = Levels.get_level(7)
+	ok = expect(count_char(lvl8, "V") == 1, "dev-levels: L8 hides one V (got %d)" % count_char(lvl8, "V")) and ok
+	ok = expect(count_char(lvl8, "d") == 1, "dev-levels: L8 has a static d") and ok
+	var lvl9: PackedStringArray = Levels.get_level(8)
+	ok = expect(count_char(lvl9, "H") >= 1 and count_char(lvl9, "V") >= 1 and count_char(lvl9, "X") >= 1, "dev-levels: L9 stacks H+V+X") and ok
+	ok = expect(count_char(lvl9, "D") == 1 and count_char(lvl9, "T") == 1, "dev-levels: L9 pairs one D with one T") and ok
+	var lvl10: PackedStringArray = Levels.get_level(9)
+	ok = expect(count_char(lvl10, "d") + count_char(lvl10, "D") >= 2, "dev-levels: L10 holds two doors") and ok
+	ok = expect(has_row_with(lvl10, "^d"), "dev-levels: L10 baits ^ beside d") and ok
 	return ok
 
 
@@ -437,7 +454,7 @@ func test_flee_once_D() -> bool:
 
 func test_reset_on_respawn() -> bool:
 	var ok := true
-	for idx: int in 5:
+	for idx: int in 10:
 		var mgr := make_manager()
 		await process_frame
 		ok = expect(mgr.start_level(idx), "reset: start_level(%d) builds" % idx) and ok
@@ -546,7 +563,7 @@ func test_reset_on_respawn() -> bool:
 
 func test_dev_levels_stable_300_frames() -> bool:
 	var ok := true
-	for idx: int in 5:
+	for idx: int in 10:
 		var mgr := make_manager()
 		await process_frame
 		ok = expect(mgr.start_level(idx), "stable: start_level(%d) builds" % idx) and ok
@@ -566,6 +583,6 @@ func test_dev_levels_stable_300_frames() -> bool:
 		if is_instance_valid(mgr.player):
 			var p: Vector2 = (mgr.player as Node2D).global_position
 			ok = expect(p.x > -200.0 and p.x < 900.0 and p.y < 600.0, "stable: level %d player sane after 300 frames (got %s)" % [idx, p]) and ok
-		ok = expect(mgr.current_level >= 0 and mgr.current_level < 5, "stable: level %d gauntlet index sane" % idx) and ok
+		ok = expect(mgr.current_level >= 0 and mgr.current_level < 10, "stable: level %d gauntlet index sane" % idx) and ok
 		await cleanup_manager(mgr)
 	return ok
