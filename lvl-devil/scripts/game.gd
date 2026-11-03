@@ -10,9 +10,12 @@ const FREEZE_TIME := 0.1
 const EXIT_DELAY := 0.2
 const KILL_Y := 376.0
 const DEATH_SFX_PATH := "res://sfx/death.wav"
+const STRIP_SCENE_PATH := "res://scenes/ui_strip.tscn"
 
 var level_idx := 0
 var current_level := 0
+var total_deaths: int = 0
+var strip: UIStrip = null
 var level: Node2D = null
 var player: CharacterBody2D = null
 var spawn_pos := Vector2.ZERO
@@ -24,6 +27,32 @@ var _generation := 0
 
 func _ready() -> void:
 	add_to_group("game")
+	ensure_strip()
+	refresh_strip()
+
+
+## Creates the persistent HUD strip once (sibling of the rebuilt level so
+## death respawns never destroy it). Loud return on a null load.
+func ensure_strip() -> void:
+	if strip != null and is_instance_valid(strip):
+		return
+	var packed := load(STRIP_SCENE_PATH) as PackedScene
+	if packed == null:
+		push_error("[Game] could not load strip scene %s" % STRIP_SCENE_PATH)
+		return
+	strip = packed.instantiate() as UIStrip
+	if strip == null:
+		push_error("[Game] could not instantiate strip scene %s" % STRIP_SCENE_PATH)
+		return
+	strip.name = "UIStrip"
+	add_child(strip)
+
+
+## Pushes both counters to the strip; safe when the strip failed to load.
+func refresh_strip() -> void:
+	if strip == null or not is_instance_valid(strip):
+		return
+	strip.refresh(current_level + 1, total_deaths)
 
 
 ## Frees any old level, builds `idx` via LevelBuilder, records the spawn
@@ -58,6 +87,7 @@ func start_level(idx: int) -> bool:
 			(door as FleeingDoor).exited.connect(_on_door_exited)
 	_dying = false
 	_exiting = false
+	refresh_strip()
 	return true
 
 
@@ -90,6 +120,8 @@ func _on_door_exited(_door: Node) -> void:
 ## Starts the death presentation unless one is already in flight.
 ## Halts the player, bursts particles, plays the squelch when shipped,
 ## waits FREEZE_TIME wall-clock, then rebuilds. Re-entrancy is guarded.
+## Death accounting is same-frame: the counter and strip update before
+## the freeze await so the label reads the new total within 1 frame.
 func request_death(_cause: String) -> void:
 	if _dying:
 		return
@@ -97,6 +129,8 @@ func request_death(_cause: String) -> void:
 		return
 	if player == null or not is_instance_valid(player):
 		return
+	total_deaths += 1
+	refresh_strip()
 	_dying = true
 	var gen := _generation
 	var corpse: Vector2 = (player as Node2D).global_position
