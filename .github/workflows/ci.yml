@@ -79,3 +79,7 @@ jobs:
       - name: Run hidden-tiles tests
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_hidden_tiles.gd
+
+      - name: Run trap-gauntlet tests
+        timeout-minutes: 5
+        run: godot --headless --path lvl-devil --script res://tests/test_traps.gd
