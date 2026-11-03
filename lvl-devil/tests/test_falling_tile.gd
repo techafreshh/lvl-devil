@@ -303,9 +303,9 @@ func test_builder_builds_falling() -> bool:
 		if visual != null:
 			ok = expect(visual.size == Vector2(32, 32), "builder: tile visual is solid-sized") and ok
 			ok = expect(visual.color == Color(0.85, 0.82, 0.75), "builder: tile visual matches solid color") and ok
-	# Dev content check: level 1 (fakeout doors, no X) builds with no falling tiles.
+	# Shipped content check: level 1 (L2 spike-only, no X) builds with no falling tiles.
 	var shipped := LevelBuilder.build(1)
-	ok = expect(shipped != null, "builder: DEV_1 still builds") and ok
+	ok = expect(shipped != null, "builder: level 1 (L2 spike-only) still builds") and ok
 	if shipped != null:
 		root.add_child(shipped)
 		await process_frame
@@ -313,7 +313,7 @@ func test_builder_builds_falling() -> bool:
 		for child: Node in shipped.get_children():
 			if child is FallingTile:
 				strays += 1
-		ok = expect(strays == 0, "builder: DEV_1 has no falling tiles") and ok
+		ok = expect(strays == 0, "builder: level 1 (L2 spike-only) has no falling tiles") and ok
 		shipped.queue_free()
 		await process_frame
 	await cleanup([level])
