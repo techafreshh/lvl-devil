@@ -44,6 +44,7 @@ func _physics_process(delta: float) -> void:
 		_buffer = 0.0
 		_coyote = 0.0
 		_cut_applied = false
+		_play_jump_sfx()
 
 	# Letting go early shortens an upward jump exactly once per jump.
 	if Input.is_action_just_released("jump"):
@@ -54,6 +55,19 @@ func _physics_process(delta: float) -> void:
 	velocity.x = dir * speed
 
 	move_and_slide()
+
+
+## Soft jump blip via the persistent game SFX bus; silent no-op when no
+## game node exists (bare player scenes in headless tests).
+func _play_jump_sfx() -> void:
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var game := tree.get_first_node_in_group("game")
+	if game != null and game.has_method("play_jump"):
+		game.play_jump()
 
 
 ## Test hook mirroring the real jump-press input path.

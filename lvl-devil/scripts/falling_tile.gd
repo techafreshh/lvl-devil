@@ -80,6 +80,7 @@ func try_trigger(player_pos: Vector2) -> bool:
 		return false
 	_state = State.SHAKING
 	_elapsed = 0.0
+	_play_sting()
 	return true
 
 
@@ -87,9 +88,33 @@ func _drop() -> void:
 	_state = State.FALLING
 	position.x = _home.x
 	_fall_v = 0.0
+	_play_whoomph()
 	var shape_node := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	if shape_node != null:
 		shape_node.set_deferred("disabled", true)
+
+
+## SFX helpers via the persistent game bus; silent no-ops with no game.
+func _play_sting() -> void:
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var game := tree.get_first_node_in_group("game")
+	if game != null and game.has_method("play_sting"):
+		game.play_sting()
+
+
+func _play_whoomph() -> void:
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var game := tree.get_first_node_in_group("game")
+	if game != null and game.has_method("play_whoomph"):
+		game.play_whoomph()
 
 
 func is_shaking() -> bool:

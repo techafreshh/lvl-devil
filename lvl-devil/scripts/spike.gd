@@ -84,10 +84,23 @@ func _activate() -> void:
 	if _active:
 		return
 	_active = true
+	_play_sting()
 	var shape_node := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	if shape_node != null:
 		shape_node.set_deferred("disabled", false)
 	queue_redraw()
+
+
+## Uh-oh sting at the extend latch; silent no-op with no game node.
+func _play_sting() -> void:
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var game := tree.get_first_node_in_group("game")
+	if game != null and game.has_method("play_sting"):
+		game.play_sting()
 
 
 ## Latch check against a world position; same-row + horizontal range.
