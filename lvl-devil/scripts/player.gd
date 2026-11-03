@@ -11,9 +11,15 @@ extends CharacterBody2D
 @export var coyote_time := 0.08
 @export var buffer_time := 0.10
 
+const BODY_RECT := Rect2(-13, -13, 26, 26)
+const BODY_RADIUS := 6
+
 var _coyote := 0.0
 var _buffer := 0.0
 var _cut_applied := false
+## Cached body style, created once and reused by _draw() so frequent
+## redraws do not allocate a new StyleBoxFlat per draw.
+var _body_style: StyleBoxFlat = null
 
 
 func _physics_process(delta: float) -> void:
@@ -62,12 +68,19 @@ func cut_jump() -> void:
 		_cut_applied = true
 
 
+## Lazily creates (once) and returns the cached body StyleBoxFlat.
+## The null-guard keeps the first _draw() safe even if it precedes _ready().
+func _get_body_style() -> StyleBoxFlat:
+	if _body_style == null:
+		_body_style = StyleBoxFlat.new()
+		_body_style.bg_color = Color(0, 0, 0, 1)
+		_body_style.set_corner_radius_all(BODY_RADIUS)
+	return _body_style
+
+
 func _draw() -> void:
 	# Rounded-square black body, 26x26 px centered on the origin.
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color(0, 0, 0, 1)
-	box.set_corner_radius_all(6)
-	draw_style_box(box, Rect2(-13, -13, 26, 26))
+	draw_style_box(_get_body_style(), BODY_RECT)
 	# Two plain white eyes.
 	draw_circle(Vector2(-6, -2), 4.0, Color.WHITE)
 	draw_circle(Vector2(6, -2), 4.0, Color.WHITE)

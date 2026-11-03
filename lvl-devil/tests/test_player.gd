@@ -27,6 +27,7 @@ func run_all() -> void:
 		"test_buffer",
 		"test_jump_cut",
 		"test_grounded_vertical_zero",
+		"test_body_style_cached",
 	]
 	for t: String in tests:
 		release_all()
@@ -217,6 +218,24 @@ func test_grounded_vertical_zero() -> bool:
 	ok = expect(player2.is_on_floor(), "grounded-vy: falling player stays grounded") and ok
 	ok = expect(player2.velocity.y == 0.0, "grounded-vy: landing residual cleared (got %s)" % player2.velocity.y) and ok
 	await cleanup(player2, floor_body2)
+	return ok
+
+
+func test_body_style_cached() -> bool:
+	var ok := true
+	var floor_body := make_floor(Vector2(0, 100), Vector2(1000, 20))
+	var player := spawn_player(Vector2(0, 40))
+	var first: StyleBoxFlat = player._get_body_style()
+	var second: StyleBoxFlat = player._get_body_style()
+	ok = expect(first != null, "style-cache: body style is created") and ok
+	ok = expect(is_same(first, second), "style-cache: same instance across calls") and ok
+	ok = expect(first.bg_color == Color(0, 0, 0, 1), "style-cache: black fill (got %s)" % first.bg_color) and ok
+	ok = expect(first.corner_radius_top_left == 6 and first.corner_radius_top_right == 6 and first.corner_radius_bottom_left == 6 and first.corner_radius_bottom_right == 6, "style-cache: corner radius 6 on all corners") and ok
+	player.queue_redraw()
+	await process_frame
+	var third: StyleBoxFlat = player._get_body_style()
+	ok = expect(is_same(first, third), "style-cache: same instance after queue_redraw") and ok
+	await cleanup(player, floor_body)
 	return ok
 
 
