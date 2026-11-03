@@ -1,6 +1,6 @@
 extends SceneTree
-## Headless trap-gauntlet behavior suite: proves every batch-1 trap family
-## together in the four in-repo dev levels. Run with:
+## Headless trap-gauntlet behavior suite: proves every trap family together
+## across the ten shipped chapters (indices 0-9) plus the end card. Run with:
 ##   godot --headless --path lvl-devil --script res://tests/test_traps.gd
 ## (Godot has no `--test` flag; `--script` is the documented entry.)
 ## Exits 1 when any check fails so CI can gate on the exit code.
@@ -24,6 +24,8 @@ func _initialize() -> void:
 		print("PASS drop-timing falling tiles ~0.12s")
 		print("PASS flee-once runaway door")
 		print("PASS reset-on-respawn ^XDHV")
+		print("PASS death-to-playing <0.5s with freeze-frame ~0.1s")
+		print("PASS shipped flow exactly 10 levels + end card")
 	quit(1 if failed > 0 else 0)
 
 
@@ -32,11 +34,15 @@ func run_all() -> void:
 	await process_frame
 	_backup_save()
 	var tests := [
+		"test_documented_constants_exact",
 		"test_dev_levels_valid",
 		"test_trigger_radius_spikes",
 		"test_trigger_radius_doors",
 		"test_drop_timing_X",
 		"test_flee_once_D",
+		"test_spike_stays_extended_until_respawn",
+		"test_hidden_solidity_HV",
+		"test_shipped_flow_ten_plus_end",
 		"test_reset_on_respawn",
 		"test_dev_levels_stable_300_frames",
 	]
@@ -224,6 +230,17 @@ func first_visual(node: Node) -> ColorRect:
 	return null
 
 
+func test_documented_constants_exact() -> bool:
+	var ok := true
+	ok = expect(FleeingDoor.TRIGGER_RANGE >= 150.0 and FleeingDoor.TRIGGER_RANGE <= 170.0, "constants: D TRIGGER_RANGE ~5 tiles (got %s)" % FleeingDoor.TRIGGER_RANGE) and ok
+	ok = expect(FleeingDoor.SPAWN_GATE >= 28.0 and FleeingDoor.SPAWN_GATE <= 36.0, "constants: D SPAWN_GATE ~1 tile (got %s)" % FleeingDoor.SPAWN_GATE) and ok
+	ok = expect(PopupSpike.TRIGGER_DX >= 34.0 and PopupSpike.TRIGGER_DX <= 42.0, "constants: ^ TRIGGER_DX ~1.2 tiles (got %s)" % PopupSpike.TRIGGER_DX) and ok
+	ok = expect(PopupSpike.TRIGGER_SAME_ROW <= 16.0, "constants: ^ TRIGGER_SAME_ROW <= 16 (got %s)" % PopupSpike.TRIGGER_SAME_ROW) and ok
+	ok = expect(FallingTile.SHAKE_TIME >= 0.10 and FallingTile.SHAKE_TIME <= 0.15, "constants: X SHAKE_TIME 0.10-0.15s (got %s)" % FallingTile.SHAKE_TIME) and ok
+	ok = expect(GameManager.FREEZE_TIME >= 0.08 and GameManager.FREEZE_TIME <= 0.12, "constants: freeze FREEZE_TIME 0.08-0.12s (got %s)" % GameManager.FREEZE_TIME) and ok
+	return ok
+
+
 func test_dev_levels_valid() -> bool:
 	var ok := true
 	ok = expect(Levels.count() == 10, "dev-levels: exactly 10 chapters (got %d)" % Levels.count()) and ok
@@ -409,7 +426,10 @@ func test_drop_timing_X() -> bool:
 	ok = expect(latch_a >= 0 and latch_a <= 2, "drop-timing: first tile latches on standing (frame %d)" % latch_a) and ok
 	if latch_a >= 0:
 		ok = expect(drop_a < 0 or drop_a > latch_a + 5, "drop-timing: no drop in the first 5 physics frames") and ok
-	ok = expect(drop_a >= 0 and drop_a <= latch_a + 12, "drop-timing: first tile drops after ~0.12s shake (frame %d)" % drop_a) and ok
+	ok = expect(drop_a >= 0 and drop_a >= latch_a + 6 and drop_a <= latch_a + 9, "drop-timing: first tile drops 6-9 frames after latch (~0.10-0.15s, latch %d drop %d)" % [latch_a, drop_a]) and ok
+	if drop_a >= 0 and latch_a >= 0:
+		var shake_ms := int(round(float(drop_a - latch_a) * 1000.0 / 60.0))
+		print("drop-timing: shake %d frames (~%dms, spec 0.10-0.15s)" % [drop_a - latch_a, shake_ms])
 	if drop_a >= 0:
 		ok = expect(tile_a.position.y - tile_a.home_pos().y > 16.0, "drop-timing: tile falls >16px (got %s)" % (tile_a.position.y - tile_a.home_pos().y)) and ok
 		await process_frame
@@ -492,8 +512,154 @@ func test_flee_once_D() -> bool:
 	return ok
 
 
+func test_spike_stays_extended_until_respawn() -> bool:
+	var ok := true
+	var mgr := make_manager()
+	await process_frame
+	ok = expect(mgr.start_level(1), "spike-dwell: start_level(1) builds") and ok
+	if not ok:
+		await cleanup_manager(mgr)
+		return ok
+	await process_frame
+	await physics_frame
+	var spike: PopupSpike = null
+	for child: Node in mgr.level.get_children():
+		if child is PopupSpike:
+			spike = child as PopupSpike
+			break
+	ok = expect(spike != null, "spike-dwell: level has a spike") and ok
+	if spike == null:
+		await cleanup_manager(mgr)
+		return ok
+	# Latch headless-decoupled, then prove it stays out for a full second.
+	ok = expect(spike.try_trigger((spike as Node2D).global_position), "spike-dwell: try_trigger latches") and ok
+	for i: int in 60:
+		await physics_frame
+		ok = expect(spike.is_active(), "spike-dwell: spike holds frame %d without respawn" % i) and ok
+		ok = expect(not spike_shape_disabled(spike), "spike-dwell: shape stays enabled frame %d" % i) and ok
+		if not ok:
+			break
+	if not ok:
+		await cleanup_manager(mgr)
+		return ok
+	# Teleport onto the spike: the kill owns the death-to-playing clock.
+	var kill_marks: Array = []
+	spike.killed.connect(func(_s: Node) -> void: kill_marks.append(Time.get_ticks_msec()))
+	var t0 := Time.get_ticks_msec()
+	(mgr.player as Node2D).global_position = (spike as Node2D).global_position
+	var old_player := mgr.player
+	await physics_frame
+	await physics_frame
+	var back := false
+	var t_spawn := 0
+	for i: int in 60:
+		await process_frame
+		if player_at_spawn(mgr) and mgr.player != old_player:
+			t_spawn = Time.get_ticks_msec()
+			back = true
+			break
+	ok = expect(back, "spike-dwell: death returns to P") and ok
+	if not back:
+		await cleanup_manager(mgr)
+		return ok
+	var total := t_spawn - t0
+	ok = expect(total < 500, "spike-dwell: death-to-playing <0.5s (got %dms)" % total) and ok
+	ok = expect(not kill_marks.is_empty(), "spike-dwell: killed fired") and ok
+	if not kill_marks.is_empty():
+		var held := t_spawn - int(kill_marks[0])
+		print("spike-dwell: freeze-frame %dms (spec ~0.1s)" % held)
+		ok = expect(held >= 50 and held <= 300, "spike-dwell: freeze-frame 50-300ms (got %dms)" % held) and ok
+	await process_frame
+	await physics_frame
+	await process_frame
+	var fresh: PopupSpike = null
+	for child: Node in mgr.level.get_children():
+		if child is PopupSpike:
+			fresh = child as PopupSpike
+			break
+	ok = expect(fresh != null and not fresh.is_active(), "spike-dwell: rebuilt spike retracted") and ok
+	if fresh != null:
+		ok = expect(spike_shape_disabled(fresh), "spike-dwell: rebuilt spike shape disabled") and ok
+	await cleanup_manager(mgr)
+	return ok
+
+
+func test_hidden_solidity_HV() -> bool:
+	var ok := true
+	var pit := LevelBuilder.build(3)
+	ok = expect(pit != null, "hv: build(3) builds L4") and ok
+	if pit == null:
+		return ok
+	root.add_child(pit)
+	await process_frame
+	var fake: Node = null
+	for child: Node in pit.get_children():
+		if (child as Node).name.begins_with("FakeFloor_"):
+			fake = child
+			break
+	ok = expect(fake != null, "hv: L4 has a FakeFloor_* node") and ok
+	if fake != null:
+		ok = expect(not (fake is StaticBody2D), "hv: H is never a StaticBody2D") and ok
+		ok = expect(not fake.is_in_group("solid_tiles"), "hv: H never joins solid_tiles") and ok
+		var solid: Node = null
+		for child: Node in pit.get_children():
+			if child is StaticBody2D and (child as Node).name.begins_with("Solid_") and first_visual(child) != null:
+				solid = child
+				break
+		var fv := first_visual(fake)
+		var sv := first_visual(solid)
+		ok = expect(fv != null and sv != null, "hv: H and # both keep visuals") and ok
+		if fv != null and sv != null:
+			ok = expect(fv.color == sv.color, "hv: H color identical to #") and ok
+			ok = expect(fv.size == sv.size, "hv: H size identical to #") and ok
+			ok = expect(fv.position == sv.position, "hv: H offset identical to #") and ok
+	await free_level(pit)
+	var rows8: PackedStringArray = Levels.get_level(7)
+	var vname := ""
+	for r: int in rows8.size():
+		for c: int in rows8[r].length():
+			if rows8[r].substr(c, 1) == "V":
+				vname = "Solid_%d_%d" % [c, r]
+	ok = expect(vname != "", "hv: L8 grid hides one V") and ok
+	var corridor := LevelBuilder.build(7)
+	ok = expect(corridor != null, "hv: build(7) builds L8") and ok
+	if corridor == null:
+		return ok
+	var wall := corridor.get_node_or_null(vname)
+	ok = expect(wall != null, "hv: L8 V cell %s exists" % vname) and ok
+	if wall != null:
+		ok = expect(wall is StaticBody2D, "hv: V is a StaticBody2D") and ok
+		ok = expect(wall.is_in_group("solid_tiles"), "hv: V joins solid_tiles") and ok
+		ok = expect((wall as Node).find_children("*", "ColorRect", true, false).is_empty(), "hv: V draws no visible tile") and ok
+	await free_level(corridor)
+	return ok
+
+
+func test_shipped_flow_ten_plus_end() -> bool:
+	var ok := true
+	ok = expect(Levels.count() == 10, "flow: shipped count is exactly 10 (got %d)" % Levels.count()) and ok
+	ok = expect(Levels.ALL.size() == 10, "flow: ALL holds 10 grids") and ok
+	ok = expect(Levels.get_level(-1).is_empty(), "flow: index -1 gated outside 0-9") and ok
+	ok = expect(Levels.get_level(10).is_empty(), "flow: index 10 gated outside 0-9") and ok
+	var mgr := make_manager()
+	await process_frame
+	ok = expect(mgr.start_level(0), "flow: start_level(0) builds") and ok
+	if not ok:
+		await cleanup_manager(mgr)
+		return ok
+	await process_frame
+	var voices := mgr.find_children("*", "AudioStreamPlayer", true, false)
+	ok = expect(voices.size() == 5, "flow: Sfx bus holds 5 voices (got %d)" % voices.size()) and ok
+	ok = expect(mgr.title != null and not (mgr.title as CanvasLayer).visible, "flow: title hidden during play") and ok
+	ok = expect(mgr.end_card != null and not (mgr.end_card as CanvasLayer).visible, "flow: end card hidden during play") and ok
+	ok = expect(mgr.state == GameManager.State.PLAYING, "flow: state PLAYING after start_level(0)") and ok
+	await cleanup_manager(mgr)
+	return ok
+
+
 func test_reset_on_respawn() -> bool:
 	var ok := true
+	var respawn_times: Array = []
 	for idx: int in 10:
 		var mgr := make_manager()
 		await process_frame
@@ -553,6 +719,7 @@ func test_reset_on_respawn() -> bool:
 		ok = expect(back, "reset: level %d death returns to P" % idx) and ok
 		if back:
 			ok = expect(elapsed < 500, "reset: level %d respawn <0.5s (got %dms)" % [idx, elapsed]) and ok
+			respawn_times.append(elapsed)
 		else:
 			await cleanup_manager(mgr)
 			return ok
@@ -598,6 +765,16 @@ func test_reset_on_respawn() -> bool:
 					ok = expect((child as Node).is_in_group("solid_tiles"), "reset: level %d V still blocking after respawn" % idx) and ok
 					ok = expect((child as Node).find_children("*", "ColorRect", true, false).is_empty(), "reset: level %d V still invisible after respawn" % idx) and ok
 		await cleanup_manager(mgr)
+	if not respawn_times.is_empty():
+		var mn := int(respawn_times[0])
+		var mx := int(respawn_times[0])
+		var total_ms := 0
+		for ms in respawn_times:
+			mn = mini(mn, int(ms))
+			mx = maxi(mx, int(ms))
+			total_ms += int(ms)
+		var avg := int(round(float(total_ms) / float(respawn_times.size())))
+		print("reset: respawn-to-playing min/max/avg %d/%d/%dms (spec <500ms)" % [mn, mx, avg])
 	return ok
 
 
