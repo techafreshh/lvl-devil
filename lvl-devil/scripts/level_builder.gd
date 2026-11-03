@@ -9,6 +9,7 @@ const TILE_SIZE := 32
 const GRID_W := 20
 const GRID_H := 11
 const PLAYER_SCENE_PATH := "res://scenes/player.tscn"
+const SPIKE_SCENE_PATH := "res://scenes/spike.tscn"
 
 
 ## Fixed validation order: shape first, then content, then spawn count.
@@ -27,7 +28,7 @@ static func validate_grid(rows: PackedStringArray, level_idx: int) -> String:
 		var row: String = rows[r]
 		for c: int in row.length():
 			var ch: String = row.substr(c, 1)
-			if ch != "#" and ch != "P" and ch != ".":
+			if ch != "#" and ch != "P" and ch != "." and ch != "^":
 				return "level %d: invalid char '%s' at row %d col %d" % [level_idx, ch, r, c]
 			if ch == "P":
 				spawns += 1
@@ -65,6 +66,7 @@ static func build_from_rows(rows: PackedStringArray, level_idx: int) -> Node2D:
 	var level := Node2D.new()
 	level.name = "Level"
 	var spawn := Vector2.ZERO
+	var spike_cells: Array[Vector2i] = []
 	for r: int in rows.size():
 		var row: String = rows[r]
 		for c: int in row.length():
@@ -74,6 +76,24 @@ static func build_from_rows(rows: PackedStringArray, level_idx: int) -> Node2D:
 					level.add_child(_make_solid(c, r, center))
 				"P":
 					spawn = center
+				"^":
+					spike_cells.append(Vector2i(c, r))
+	var spike_packed := load(SPIKE_SCENE_PATH) as PackedScene
+	if not spike_cells.is_empty():
+		if spike_packed == null:
+			push_error("[LevelBuilder] level %d: could not load spike scene %s" % [level_idx, SPIKE_SCENE_PATH])
+			level.free()
+			return null
+		for cell: Vector2i in spike_cells:
+			var spike := spike_packed.instantiate() as Node2D
+			if spike == null:
+				push_error("[LevelBuilder] level %d: could not instantiate spike scene %s" % [level_idx, SPIKE_SCENE_PATH])
+				level.free()
+				return null
+			spike.name = "Spike_%d_%d" % [cell.x, cell.y]
+			spike.position = Vector2(cell.x * TILE_SIZE + TILE_SIZE / 2, cell.y * TILE_SIZE + TILE_SIZE / 2)
+			spike.add_to_group("spikes")
+			level.add_child(spike)
 	var packed := load(PLAYER_SCENE_PATH) as PackedScene
 	if packed == null:
 		push_error("[LevelBuilder] level %d: could not load player scene %s" % [level_idx, PLAYER_SCENE_PATH])
@@ -86,6 +106,7 @@ static func build_from_rows(rows: PackedStringArray, level_idx: int) -> Node2D:
 		return null
 	player.name = "Player"
 	player.position = spawn
+	player.add_to_group("player")
 	level.add_child(player)
 	return level
 
