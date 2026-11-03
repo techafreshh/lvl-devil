@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui_strip.gd" id="1_strip"]
+
+[node name="UIStrip" type="CanvasLayer"]
+script = ExtResource("1_strip")
