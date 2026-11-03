@@ -72,3 +72,7 @@ jobs:
       - name: Run door tests
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_door.gd
+
+      - name: Run hidden-tiles tests
+        timeout-minutes: 5
+        run: godot --headless --path lvl-devil --script res://tests/test_hidden_tiles.gd
