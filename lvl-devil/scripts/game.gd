@@ -1,0 +1,146 @@
+class_name GameManager extends Node
+## Death/respawn manager: hosts the built level, freezes on death with a
+## shape-burst, then rebuilds the level so every trap resets to grid state.
+## Freeze is a wall-clock SceneTreeTimer with the player halted (never
+## get_tree().paused or Engine.time_scale, which break headless timing).
+## A generation counter keeps `R` during an in-flight death to one respawn.
+
+
+const FREEZE_TIME := 0.1
+const KILL_Y := 376.0
+const DEATH_SFX_PATH := "res://sfx/death.wav"
+
+var level_idx := 0
+var level: Node2D = null
+var player: CharacterBody2D = null
+var spawn_pos := Vector2.ZERO
+
+var _dying := false
+var _generation := 0
+
+
+func _ready() -> void:
+	add_to_group("game")
+
+
+## Frees any old level, builds `idx` via LevelBuilder, records the spawn
+## and wires every spike `killed` signal. Loud false on a null build.
+func start_level(idx: int) -> bool:
+	level_idx = idx
+	if is_instance_valid(level):
+		remove_child(level)
+		level.free()
+	level = null
+	player = null
+	var built := LevelBuilder.build(idx)
+	if built == null:
+		push_error("[Game] level %d failed to build; aborting load" % idx)
+		return false
+	level = built
+	add_child(level)
+	player = level.get_node_or_null("Player") as CharacterBody2D
+	if player == null:
+		push_error("[Game] level %d: missing Player after build" % idx)
+		return false
+	spawn_pos = (player as Node2D).global_position
+	var spikes := get_tree().get_nodes_in_group("spikes")
+	for spike: Node in spikes:
+		if spike.has_signal("killed"):
+			(spike as PopupSpike).killed.connect(_on_spike_killed)
+	_dying = false
+	return true
+
+
+func _on_spike_killed(_spike: Node) -> void:
+	request_death("spike")
+
+
+## Starts the death presentation unless one is already in flight.
+## Halts the player, bursts particles, plays the squelch when shipped,
+## waits FREEZE_TIME wall-clock, then rebuilds. Re-entrancy is guarded.
+func request_death(_cause: String) -> void:
+	if _dying:
+		return
+	if level == null or not is_instance_valid(level):
+		return
+	if player == null or not is_instance_valid(player):
+		return
+	_dying = true
+	var gen := _generation
+	var corpse: Vector2 = (player as Node2D).global_position
+	(player as CharacterBody2D).set_physics_process(false)
+	(player as CharacterBody2D).velocity = Vector2.ZERO
+	_burst_particles(corpse)
+	_play_death_sfx()
+	await get_tree().create_timer(FREEZE_TIME).timeout
+	if gen != _generation:
+		return
+	respawn()
+
+
+## Fast-path instant restart: no freeze, safe mid-death via the counter.
+func respawn() -> void:
+	_generation += 1
+	_dying = false
+	start_level(level_idx)
+
+
+func _physics_process(_delta: float) -> void:
+	if _dying:
+		return
+	if player == null or not is_instance_valid(player):
+		return
+	if (player as Node2D).global_position.y > KILL_Y:
+		request_death("fall")
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("restart"):
+		respawn()
+		get_viewport().set_input_as_handled()
+
+
+func _burst_particles(at: Vector2) -> void:
+	var burst := CPUParticles2D.new()
+	burst.amount = 16
+	burst.lifetime = 0.4
+	burst.one_shot = true
+	burst.explosiveness = 1.0
+	burst.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	burst.emission_sphere_radius = 6.0
+	burst.direction = Vector2(0, -1)
+	burst.spread = 180.0
+	burst.gravity = Vector2(0, 800)
+	burst.initial_velocity_min = 120.0
+	burst.initial_velocity_max = 260.0
+	burst.scale_amount_min = 2.0
+	burst.scale_amount_max = 4.0
+	burst.color = Color(0.1, 0.1, 0.1)
+	burst.position = at - get_global_offset()
+	add_child(burst)
+	burst.emitting = true
+	var timer := get_tree().create_timer(1.0)
+	timer.timeout.connect(func() -> void: if is_instance_valid(burst): burst.queue_free())
+
+
+## Global offset of this manager in world space (Main sits at the origin,
+## so this is normally zero, but keeps the burst on the corpse regardless).
+func get_global_offset() -> Vector2:
+	var p := get_parent() as Node2D
+	if p != null:
+		return p.global_position
+	return Vector2.ZERO
+
+
+## Silent-safe death squelch: plays only when the wav has landed.
+func _play_death_sfx() -> void:
+	if not ResourceLoader.exists(DEATH_SFX_PATH):
+		return
+	var stream := load(DEATH_SFX_PATH) as AudioStream
+	if stream == null:
+		return
+	var voice := AudioStreamPlayer.new()
+	voice.stream = stream
+	add_child(voice)
+	voice.finished.connect(voice.queue_free)
+	voice.play()
