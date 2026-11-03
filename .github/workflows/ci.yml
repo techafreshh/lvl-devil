@@ -60,3 +60,11 @@ jobs:
       - name: Run level-builder tests
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_level_builder.gd
+
+      - name: Run spike tests
+        timeout-minutes: 5
+        run: godot --headless --path lvl-devil --script res://tests/test_spike.gd
+
+      - name: Run death-loop tests
+        timeout-minutes: 5
+        run: godot --headless --path lvl-devil --script res://tests/test_death_loop.gd
