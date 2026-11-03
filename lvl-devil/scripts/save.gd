@@ -28,7 +28,14 @@ static func load_data(path := SAVE_PATH) -> Dictionary:
 		else:
 			var text := file.get_as_text()
 			file.close()
-			parsed = JSON.parse_string(text)
+			# NOTE: JSON.parse_string emits an engine ERROR on malformed
+			# text; the instance parser stays silent so a corrupt save is
+			# only a warning + repair below.
+			var parser := JSON.new()
+			if parser.parse(text) == OK:
+				parsed = parser.data
+			else:
+				parsed = null
 			if parsed == null or not (parsed is Dictionary):
 				needs_repair = true
 				parsed = null
