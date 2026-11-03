@@ -1,8 +1,8 @@
 class_name Levels extends RefCounted
 ## Batch-1 level grids as plain text.
-## Legend: `#` solid, `P` player spawn (exactly one per level), `.` empty.
+## Legend: `#` solid, `P` player spawn (exactly one per level), `.` empty, `^` pop-up spike.
 ## One cell per char, rows stored top-down on the 32px grid (20x11, 640x360).
-## Later issues extend the legend (`^X dDT HV`) and reuse this table.
+## Later issues extend the legend (`X dDT HV`) and reuse this table.
 
 
 const LEVEL_1: PackedStringArray = [
@@ -14,7 +14,7 @@ const LEVEL_1: PackedStringArray = [
 	"....................",
 	"......####..........",
 	"....................",
-	"..P...........####..",
+	"..P....^......####..",
 	"####################",
 	"####################",
 ]
