@@ -31,7 +31,7 @@ static func validate_grid(rows: PackedStringArray, level_idx: int) -> String:
 		var row: String = rows[r]
 		for c: int in row.length():
 			var ch: String = row.substr(c, 1)
-			if ch != "#" and ch != "P" and ch != "." and ch != "^" and ch != "d" and ch != "D" and ch != "T":
+			if ch != "#" and ch != "P" and ch != "." and ch != "^" and ch != "X" and ch != "d" and ch != "D" and ch != "T":
 				return "level %d: invalid char '%s' at row %d col %d" % [level_idx, ch, r, c]
 			if ch == "P":
 				spawns += 1
@@ -90,6 +90,11 @@ static func build_from_rows(rows: PackedStringArray, level_idx: int) -> Node2D:
 			match row.substr(c, 1):
 				"#":
 					level.add_child(_make_solid(c, r, center))
+				"X":
+					var tile := FallingTile.new()
+					tile.name = "FallingTile_%d_%d" % [c, r]
+					tile.position = center
+					level.add_child(tile)
 				"P":
 					spawn = center
 				"^":
