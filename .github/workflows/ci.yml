@@ -75,4 +75,3 @@ jobs:
       - name: Run door tests
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_door.gd
-origin/main
