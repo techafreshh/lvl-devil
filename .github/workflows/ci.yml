@@ -77,6 +77,10 @@ jobs:
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_ui_strip.gd
 
+      - name: Run title/end-card tests
+        timeout-minutes: 5
+        run: godot --headless --path lvl-devil --script res://tests/test_title_end.gd
+
       - name: Run falling-tile tests
         timeout-minutes: 5
         run: godot --headless --path lvl-devil --script res://tests/test_falling_tile.gd

@@ -12,13 +12,18 @@ deterministic headless behavior suite.
 godot --headless --path lvl-devil --quit-after 60
 ```
 
-Expected: boots to dev level 0 with exit code 0 and no missing-autoload
-errors. Or open `lvl-devil/project.godot` in the Godot 4.x editor and
-press Play (the `main.tscn` main scene starts level 0 through
-`GameManager`). Move with arrows/`AD`, jump with space/`Z`, restart
-with `R`; falling below the level kills the player and respawns at `P`
-in <0.5s. A persistent top strip always shows `LEVEL n` (1-based) on
-the left and the all-time `DEATHS n` total on the right.
+Expected: boots to the title screen with exit code 0 and no
+missing-autoload errors. Or open `lvl-devil/project.godot` in the Godot
+4.x editor and press Play (the `main.tscn` main scene boots to the title
+through `GameManager`). The title shows `LVL-DEVIL` plus the key legend
+(`Arrows/WASD` move, `Space/Z` jump, `R` restart); any key starts play
+at the saved highest level (`LEVEL 1` on a fresh boot). Move with
+arrows/`AD`, jump with space/`Z`, restart with `R`; falling below the
+level kills the player and respawns at `P` in <0.5s. A persistent top
+strip always shows `LEVEL n` (1-based) on the left and the all-time
+`DEATHS n` total on the right. Clearing the L10 door shows a one-screen
+end card (`CONGRATULATIONS`, all-time `DEATHS n`); `R` there replays
+from level 1 keeping all-time deaths.
 
 ## Legend
 
@@ -29,8 +34,10 @@ the left and the all-time `DEATHS n` total on the right.
 
 ## Dev levels
 
-The game boots to chapter 1; touching a door advances to the next chapter
-and wraps around the gauntlet forever. Death respawns at `P` in
+The game boots to the title; any key starts at the saved highest chapter
+(chapter 1 on a fresh boot). Touching a door advances to the next
+chapter; the L10 door shows the end card instead of wrapping (`R`
+replays from chapter 1). Death respawns at `P` in
 <0.5s with every trap reset to grid state.
 
 - `LVL_1` — `X` fall teach: chained falling tiles over a safety net,
@@ -69,6 +76,7 @@ godot --headless --path lvl-devil --script res://tests/test_falling_tile.gd
 godot --headless --path lvl-devil --script res://tests/test_door.gd
 godot --headless --path lvl-devil --script res://tests/test_hidden_tiles.gd
 godot --headless --path lvl-devil --script res://tests/test_ui_strip.gd
+godot --headless --path lvl-devil --script res://tests/test_title_end.gd
 ```
 
 The trap-gauntlet suite (`test_traps.gd`) is a supporting proof: chapter
@@ -81,5 +89,7 @@ exit, the L4 pit falling through against its solid neighbor, and scripted
 completion of every chapter. The escalation suite (`test_levels_6_10.gd`)
 proves chapters 6-10 the same way (11x20 shape and charset, L8 sparing
 `V`, L9 full stack, L10 spike-guarded bait with a reachable true exit,
-and scripted completion of every chapter). Every suite exits 0 on success
-and non-zero on any failure.
+and scripted completion of every chapter). The title/end suite
+(`test_title_end.gd`) proves the title labels, any-key start, the L10
+end card with the all-time total, and `R` replay resetting progress but
+not deaths. Every suite exits 0 on success and non-zero on any failure.
