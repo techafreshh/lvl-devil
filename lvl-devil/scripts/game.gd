@@ -15,6 +15,7 @@ const STRIP_SCENE_PATH := "res://scenes/ui_strip.tscn"
 var level_idx := 0
 var current_level := 0
 var total_deaths: int = 0
+var highest_level: int = 0
 var strip: UIStrip = null
 var level: Node2D = null
 var player: CharacterBody2D = null
@@ -27,6 +28,9 @@ var _generation := 0
 
 func _ready() -> void:
 	add_to_group("game")
+	var loaded := Save.load_data()
+	highest_level = int(loaded.get("highest_level", 0))
+	total_deaths = int(loaded.get("total_deaths", 0))
 	ensure_strip()
 	refresh_strip()
 
@@ -87,6 +91,8 @@ func start_level(idx: int) -> bool:
 			(door as FleeingDoor).exited.connect(_on_door_exited)
 	_dying = false
 	_exiting = false
+	highest_level = maxi(highest_level, idx)
+	Save.save_data(highest_level, total_deaths)
 	refresh_strip()
 	return true
 
@@ -131,6 +137,7 @@ func request_death(_cause: String) -> void:
 		return
 	total_deaths += 1
 	refresh_strip()
+	Save.save_data(highest_level, total_deaths)
 	_dying = true
 	var gen := _generation
 	var corpse: Vector2 = (player as Node2D).global_position
