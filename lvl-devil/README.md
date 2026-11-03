@@ -4,6 +4,20 @@ Batch-1 trap gauntlet: four dev levels proving every trap family
 (pop-up spikes `^`, falling tiles `X`, fleeing doors `D`, fake floors `H`,
 hidden walls `V`) with a deterministic headless behavior suite.
 
+## How to run the game
+
+```sh
+godot --headless --path lvl-devil --quit-after 60
+```
+
+Expected: boots to dev level 0 with exit code 0 and no missing-autoload
+errors. Or open `lvl-devil/project.godot` in the Godot 4.x editor and
+press Play (the `main.tscn` main scene starts level 0 through
+`GameManager`). Move with arrows/`AD`, jump with space/`Z`, restart
+with `R`; falling below the level kills the player and respawns at `P`
+in <0.5s. A persistent top strip always shows `LEVEL n` (1-based) on
+the left and the all-time `DEATHS n` total on the right.
+
 ## Legend
 
 `#` solid, `P` player spawn (exactly one per level), `.` empty,
@@ -36,6 +50,7 @@ godot --headless --path lvl-devil --script res://tests/test_death_loop.gd
 godot --headless --path lvl-devil --script res://tests/test_falling_tile.gd
 godot --headless --path lvl-devil --script res://tests/test_door.gd
 godot --headless --path lvl-devil --script res://tests/test_hidden_tiles.gd
+godot --headless --path lvl-devil --script res://tests/test_ui_strip.gd
 ```
 
 The trap-gauntlet suite (`test_traps.gd`) is the primary proof: dev-level
