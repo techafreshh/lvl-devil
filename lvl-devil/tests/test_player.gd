@@ -26,6 +26,7 @@ func run_all() -> void:
 		"test_coyote_expired",
 		"test_buffer",
 		"test_jump_cut",
+		"test_grounded_vertical_zero",
 	]
 	for t: String in tests:
 		release_all()
@@ -188,6 +189,34 @@ func test_buffer() -> bool:
 	ok = expect(land_i >= 0, "buffer: player landed") and ok
 	ok = expect(jumped, "buffer: buffered jump executed on landing") and ok
 	await cleanup(player, floor_body)
+	return ok
+
+
+func test_grounded_vertical_zero() -> bool:
+	var ok := true
+	var floor_body := make_floor(Vector2(0, 100), Vector2(1000, 20))
+	var player := spawn_player(Vector2(-200, 40))
+	ok = expect(await settle_grounded(player, 60), "grounded-vy: player lands on floor") and ok
+	for i: int in 3:
+		await physics_frame
+	ok = expect(player.is_on_floor(), "grounded-vy: settled on floor") and ok
+	ok = expect(player.velocity.y == 0.0, "grounded-vy: residual cleared on landing (got %s)" % player.velocity.y) and ok
+	Input.action_press("move_right")
+	for i: int in 60:
+		await physics_frame
+	ok = expect(player.is_on_floor(), "grounded-vy: still grounded while walking") and ok
+	ok = expect(player.velocity.y == 0.0, "grounded-vy: velocity.y == 0.0 while walking (got %s)" % player.velocity.y) and ok
+	await cleanup(player, floor_body)
+	# Landing-residual case: falling speed must read 0.0 once grounded.
+	var floor_body2 := make_floor(Vector2(0, 100), Vector2(1000, 20))
+	var player2 := spawn_player(Vector2(0, 57))
+	player2.velocity.y = 200.0
+	ok = expect(await settle_grounded(player2, 60), "grounded-vy: falling player lands") and ok
+	for i: int in 5:
+		await physics_frame
+	ok = expect(player2.is_on_floor(), "grounded-vy: falling player stays grounded") and ok
+	ok = expect(player2.velocity.y == 0.0, "grounded-vy: landing residual cleared (got %s)" % player2.velocity.y) and ok
+	await cleanup(player2, floor_body2)
 	return ok
 
 

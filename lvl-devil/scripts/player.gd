@@ -23,6 +23,8 @@ func _physics_process(delta: float) -> void:
 		_coyote -= delta
 	else:
 		_coyote = coyote_time
+		if velocity.y > 0.0:
+			velocity.y = 0.0
 
 	# A fresh jump press is buffered so landing shortly after still jumps.
 	if Input.is_action_just_pressed("jump"):
