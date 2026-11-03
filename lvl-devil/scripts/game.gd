@@ -11,12 +11,19 @@ const EXIT_DELAY := 0.2
 const KILL_Y := 376.0
 const DEATH_SFX_PATH := "res://sfx/death.wav"
 const STRIP_SCENE_PATH := "res://scenes/ui_strip.tscn"
+const TITLE_SCENE_PATH := "res://scenes/title.tscn"
+const END_SCENE_PATH := "res://scenes/end_card.tscn"
+
+enum State { TITLE, PLAYING, END }
 
 var level_idx := 0
 var current_level := 0
 var total_deaths: int = 0
 var highest_level: int = 0
+var state: State = State.TITLE
 var strip: UIStrip = null
+var title: TitleScreen = null
+var end_card: EndCard = null
 var level: Node2D = null
 var player: CharacterBody2D = null
 var spawn_pos := Vector2.ZERO
@@ -32,7 +39,9 @@ func _ready() -> void:
 	highest_level = int(loaded.get("highest_level", 0))
 	total_deaths = int(loaded.get("total_deaths", 0))
 	ensure_strip()
-	refresh_strip()
+	ensure_title()
+	ensure_end_card()
+	show_title()
 
 
 ## Creates the persistent HUD strip once (sibling of the rebuilt level so
@@ -59,10 +68,108 @@ func refresh_strip() -> void:
 	strip.refresh(current_level + 1, total_deaths)
 
 
+## Creates the title overlay once; loud return on a null load.
+func ensure_title() -> void:
+	if title != null and is_instance_valid(title):
+		return
+	var packed := load(TITLE_SCENE_PATH) as PackedScene
+	if packed == null:
+		push_error("[Game] could not load title scene %s" % TITLE_SCENE_PATH)
+		return
+	title = packed.instantiate() as TitleScreen
+	if title == null:
+		push_error("[Game] could not instantiate title scene %s" % TITLE_SCENE_PATH)
+		return
+	title.name = "TitleScreen"
+	add_child(title)
+
+
+## Creates the end-card overlay once; loud return on a null load.
+func ensure_end_card() -> void:
+	if end_card != null and is_instance_valid(end_card):
+		return
+	var packed := load(END_SCENE_PATH) as PackedScene
+	if packed == null:
+		push_error("[Game] could not load end-card scene %s" % END_SCENE_PATH)
+		return
+	end_card = packed.instantiate() as EndCard
+	if end_card == null:
+		push_error("[Game] could not instantiate end-card scene %s" % END_SCENE_PATH)
+		return
+	end_card.name = "EndCard"
+	add_child(end_card)
+
+
+## Parks on the title: hides the strip and end card, frees any level so
+## boot builds nothing, and waits for any key to start at the saved best.
+func show_title() -> void:
+	_generation += 1
+	_dying = false
+	_exiting = false
+	if is_instance_valid(level):
+		remove_child(level)
+		level.free()
+	level = null
+	player = null
+	ensure_strip()
+	ensure_title()
+	ensure_end_card()
+	if strip != null and is_instance_valid(strip):
+		strip.visible = false
+	if end_card != null and is_instance_valid(end_card):
+		end_card.hide_card()
+	if title != null and is_instance_valid(title):
+		title.show_screen()
+	state = State.TITLE
+	refresh_strip()
+
+
+## Parks on the end card after the L10 door: freezes the player, hides
+## the strip, and shows the all-time total. Indices park at 0 (the wrap
+## landing) while `highest_level` stays at max until `R` replays.
+func show_end_card() -> void:
+	current_level = 0
+	level_idx = 0
+	_exiting = false
+	if player != null and is_instance_valid(player):
+		(player as CharacterBody2D).set_physics_process(false)
+		(player as CharacterBody2D).velocity = Vector2.ZERO
+	ensure_end_card()
+	if strip != null and is_instance_valid(strip):
+		strip.visible = false
+	if title != null and is_instance_valid(title):
+		title.hide_screen()
+	if end_card != null and is_instance_valid(end_card):
+		end_card.show_card(total_deaths)
+	state = State.END
+
+
+## Replays from level 1, resetting progress but keeping all-time deaths.
+func _play_again() -> bool:
+	highest_level = 0
+	Save.save_data(0, total_deaths)
+	return start_level(0)
+
+
+## Starts play at the saved best (fresh boots enter `LEVEL 1`).
+func _start_from_title() -> bool:
+	return start_level(maxi(highest_level, 0))
+
+
 ## Frees any old level, builds `idx` via LevelBuilder, records the spawn
 ## and wires every spike `killed` and door `exited` signal.
 ## Loud false on a null build.
 func start_level(idx: int) -> bool:
+	ensure_strip()
+	ensure_title()
+	ensure_end_card()
+	if title != null and is_instance_valid(title):
+		title.hide_screen()
+	if end_card != null and is_instance_valid(end_card):
+		end_card.hide_card()
+	if strip != null and is_instance_valid(strip):
+		strip.visible = true
+	state = State.PLAYING
 	current_level = idx
 	level_idx = idx
 	if is_instance_valid(level):
@@ -117,10 +224,16 @@ func _on_door_exited(_door: Node) -> void:
 		return
 	_exiting = true
 	var gen := _generation
+	var from := current_level
 	await get_tree().create_timer(EXIT_DELAY).timeout
 	if gen != _generation:
 		return
-	next_level()
+	# The last level exits to the end card; `next_level` keeps its wrap
+	# so existing completion tests still observe the 0 landing.
+	if from == Levels.count() - 1:
+		show_end_card()
+	else:
+		next_level()
 
 
 ## Starts the death presentation unless one is already in flight.
@@ -159,6 +272,8 @@ func respawn() -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	if state != State.PLAYING:
+		return
 	if _dying:
 		return
 	if player == null or not is_instance_valid(player):
@@ -168,6 +283,24 @@ func _physics_process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if state == State.TITLE:
+		var go := false
+		if event is InputEventKey:
+			var key := event as InputEventKey
+			if key.pressed and not key.echo:
+				go = true
+		elif event is InputEventAction:
+			if (event as InputEventAction).pressed:
+				go = true
+		if go:
+			_start_from_title()
+			get_viewport().set_input_as_handled()
+		return
+	if state == State.END:
+		if event.is_action_pressed("restart"):
+			_play_again()
+			get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("restart"):
 		respawn()
 		get_viewport().set_input_as_handled()
