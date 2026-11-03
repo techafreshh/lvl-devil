@@ -52,3 +52,7 @@ jobs:
             fi
           done
           exit $status
+
+      - name: Run GDScript tests
+        timeout-minutes: 5
+        run: godot --headless --path lvl-devil --script res://tests/test_player.gd
