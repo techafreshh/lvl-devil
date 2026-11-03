@@ -1,9 +1,10 @@
 # lvl-devil
 
-Teach-beat chapters 1-5: five single-screen levels teaching each joke in
-order (falling floors `X`, pop-up spikes `^`, the fleeing door `D`, fake
-floors `H`, and the baited static exit) with a deterministic headless
-behavior suite.
+Teach-beat chapters 1-5 plus the escalation finale 6-10: ten single-screen
+levels teaching each joke in order (falling floors `X`, pop-up spikes `^`,
+the fleeing door `D`, fake floors `H`, and the baited static exit) then
+stacking them into a comedic gauntlet ending on a real door, with a
+deterministic headless behavior suite.
 
 ## How to run the game
 
@@ -41,6 +42,16 @@ and wraps around the gauntlet forever. Death respawns at `P` in
 - `LVL_4` — `H` pit: fake floor over open air (neighbors stay `#`),
   static `d` past the jump.
 - `LVL_5` — static `d` baited by a nearby `^`.
+- `LVL_6` — chained-`X` hall: eight falling tiles over a safety net,
+  lone static `d`.
+- `LVL_7` — `^`+`X` combo: two isolated pop-up spikes past a falling
+  run-up, static `d`.
+- `LVL_8` — sparing-`V` mind-game corridor: one hidden wall in an
+  otherwise promising hall, static `d`.
+- `LVL_9` — everything gauntlet: `H` pit plus `V` wall plus `X` run-up
+  plus a fleeing `D`->`T` pair.
+- `LVL_10` — finale stack ending on a real door: a spike-guarded bait
+  `d`, then the true exit `d`.
 
 ## How to run the headless suites
 
@@ -49,6 +60,7 @@ Godot has no `--test` flag; each suite is a `--script` entry:
 ```sh
 godot --headless --path lvl-devil --script res://tests/test_traps.gd
 godot --headless --path lvl-devil --script res://tests/test_levels_1_5.gd
+godot --headless --path lvl-devil --script res://tests/test_levels_6_10.gd
 godot --headless --path lvl-devil --script res://tests/test_player.gd
 godot --headless --path lvl-devil --script res://tests/test_level_builder.gd
 godot --headless --path lvl-devil --script res://tests/test_spike.gd
@@ -66,5 +78,8 @@ for `^XDHV`, <0.5s respawn, and 300-frame stability per chapter. The
 teach suite (`test_levels_1_5.gd`) is the primary proof: 11x20 shape and
 charset for chapters 1-5, the L3 dodge witnessed once with a catchable
 exit, the L4 pit falling through against its solid neighbor, and scripted
-completion of every chapter. Every suite exits 0 on success and non-zero
-on any failure.
+completion of every chapter. The escalation suite (`test_levels_6_10.gd`)
+proves chapters 6-10 the same way (11x20 shape and charset, L8 sparing
+`V`, L9 full stack, L10 spike-guarded bait with a reachable true exit,
+and scripted completion of every chapter). Every suite exits 0 on success
+and non-zero on any failure.

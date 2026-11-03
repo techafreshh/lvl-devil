@@ -1,5 +1,6 @@
 class_name Levels extends RefCounted
-## Teach-beat chapters as plain text (ordered L1-L5 trap lessons).
+## Teach-beat chapters plus the escalation finale as plain text (ordered
+## L1-L5 trap lessons, L6-L10 comedic stack ending on a real door).
 ## Legend: `#` solid, `P` player spawn (exactly one per level), `.` empty,
 ## `^` pop-up spike, `X` falling tile, `d` static exit, `D` fleeing door,
 ## `T` fleeing-door landing cell, `H` fake floor, `V` hidden wall.
@@ -7,6 +8,9 @@ class_name Levels extends RefCounted
 ## `P` stays at col 2 row 8 so the spawn is (80, 272) on every chapter.
 ## Teach order: L1 `X` fall, L2 `^` singles, L3 fleeing `D`->`T`,
 ## L4 `H` pit, L5 static `d` baited by `^`.
+## Escalation: L6 chained-`X` hall, L7 `^`+`X` combo, L8 sparing-`V`
+## mind-game corridor, L9 `H`+`V`+`X`+`D`+`T` gauntlet, L10 finale stack
+## ending on a real door (spike-guarded bait `d`, then the true exit).
 
 
 const LVL_1: PackedStringArray = [
@@ -79,7 +83,77 @@ const LVL_5: PackedStringArray = [
 	"####################",
 ]
 
-const ALL: Array[PackedStringArray] = [LVL_1, LVL_2, LVL_3, LVL_4, LVL_5]
+const LVL_6: PackedStringArray = [
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"..P.............d...",
+	"#####XXXXXXXX#######",
+	"####################",
+]
+
+const LVL_7: PackedStringArray = [
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"..P......^...^..d...",
+	"#####XX#############",
+	"####################",
+]
+
+const LVL_8: PackedStringArray = [
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"..P........V....d...",
+	"####################",
+	"####################",
+]
+
+const LVL_9: PackedStringArray = [
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"..P...........V.D.T.",
+	"#####XX###H#########",
+	"##########.#########",
+]
+
+const LVL_10: PackedStringArray = [
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"..P........^d....d..",
+	"#####XX#############",
+	"####################",
+]
+
+const ALL: Array[PackedStringArray] = [LVL_1, LVL_2, LVL_3, LVL_4, LVL_5, LVL_6, LVL_7, LVL_8, LVL_9, LVL_10]
 
 
 ## Number of teach chapters.

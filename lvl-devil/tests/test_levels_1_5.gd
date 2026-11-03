@@ -119,8 +119,8 @@ func t_center_of(idx: int) -> Vector2:
 
 func test_shape_11x20_charset_spawn() -> bool:
 	var ok := true
-	ok = expect(Levels.count() == 5, "shape: exactly 5 teach chapters (got %d)" % Levels.count()) and ok
-	ok = expect(Levels.ALL.size() == 5, "shape: ALL holds 5 grids") and ok
+	ok = expect(Levels.count() == 10, "shape: exactly 10 chapters (got %d)" % Levels.count()) and ok
+	ok = expect(Levels.ALL.size() == 10, "shape: ALL holds 10 grids") and ok
 	var allowed := "#P.^XdDTHV."
 	for i: int in 5:
 		var rows: PackedStringArray = Levels.get_level(i)
