@@ -59,6 +59,7 @@ The core value proposition is **comedy through betrayal with zero friction**: de
 - [ ] ASCII-level format + load-time validation (e.g., `D` without exactly one `T` fails loudly)
 - [ ] CC0 sound effects (jump, trap sting, death, door chime, floor-whoosh)
 - [ ] Fixed internal resolution 640×360 @ 32 px grid, 2× window, `canvas_items` stretch
+- [ ] CI workflow as an early deliverable: GitHub Actions runs `godot --headless --import` (fail on script errors), `*.uid` cleanliness, and headless script tests — so the factory's `["*"]` merge gate has real checks from lap 2 on
 
 ### Out of Scope (deferred)
 
@@ -82,7 +83,7 @@ The core value proposition is **comedy through betrayal with zero friction**: de
 
 ## 6. Core Architecture & Patterns
 
-**Approach:** levels are data (ASCII strings), systems are small scenes/scripts; a builder instantiates everything at runtime. No tilemaps, no editor-placed per-level scenes, no addons.
+**Approach:** levels are data (ASCII strings), systems are small scenes/scripts; a builder instantiates everything at runtime. No tilemaps, no editor-placed per-level scenes, no addons. Repo layout: game project lives in the `lvl-devil/` subfolder (docs and `.agents/` at the repo root, jetpack-style); all Godot paths below are relative to that subfolder.
 
 ```
 lvl-devil/
